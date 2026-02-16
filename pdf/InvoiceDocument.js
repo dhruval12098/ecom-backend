@@ -1,19 +1,11 @@
-const React = require('react');
-const {
-  Document,
-  Page,
-  Text,
-  View,
-  StyleSheet,
-  Image
-} = require('@react-pdf/renderer');
-
-const styles = StyleSheet.create({
+const styles = {
   page: {
     fontFamily: 'Helvetica',
     fontSize: 10,
     color: '#111827',
-    padding: 32,
+    paddingTop: 64,
+    paddingHorizontal: 40,
+    paddingBottom: 40,
     backgroundColor: '#ffffff'
   },
   header: {
@@ -30,6 +22,10 @@ const styles = StyleSheet.create({
   logo: {
     height: 32,
     objectFit: 'contain'
+  },
+  logoWrap: {
+    width: 120,
+    alignItems: 'flex-start'
   },
   storeName: {
     fontSize: 18,
@@ -63,12 +59,25 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     marginBottom: 8
   },
+  sectionRule: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    marginTop: 6,
+    marginBottom: 10
+  },
   twoCol: {
     flexDirection: 'row',
     justifyContent: 'space-between'
   },
   col: {
     width: '48%'
+  },
+  infoCard: {
+    backgroundColor: '#f9fafb',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    padding: 12
   },
   table: {
     borderWidth: 1,
@@ -133,8 +142,16 @@ const styles = StyleSheet.create({
   },
   strong: {
     fontWeight: 700
+  },
+  invoiceCode: {
+    fontSize: 16,
+    fontWeight: 700
+  },
+  invoiceDate: {
+    fontSize: 9,
+    color: '#6b7280'
   }
-});
+};
 
 function formatCurrency(amount, currency) {
   if (amount === null || amount === undefined) return '';
@@ -151,7 +168,10 @@ function formatDate(dateValue) {
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' });
 }
 
-function InvoiceDocument({ order, items, payment, settings }) {
+function createInvoiceDocument({ React, renderer, order, items, payment, settings }) {
+  const { Document, Page, Text, View, StyleSheet, Image } = renderer;
+  const reactPdfStyles = StyleSheet.create(styles);
+
   const storeName = settings?.store_name || 'Your Store';
   const supportEmail = settings?.support_email || settings?.smtp_email || '';
   const logoUrl = settings?.logo_url || '';
@@ -182,151 +202,157 @@ function InvoiceDocument({ order, items, payment, settings }) {
       null,
       React.createElement(
         Page,
-        { size: 'A4', style: styles.page },
+        { size: 'A4', style: reactPdfStyles.page },
         React.createElement(
           View,
-          { style: styles.header },
+          { style: reactPdfStyles.header },
           React.createElement(
             View,
-            { style: styles.brandBlock },
+            { style: reactPdfStyles.brandBlock },
             logoUrl
-              ? React.createElement(Image, { src: logoUrl, style: styles.logo })
-              : React.createElement(Text, { style: styles.storeName }, storeName),
-            React.createElement(Text, { style: styles.muted }, storeAddress || ''),
-            storePhone ? React.createElement(Text, { style: styles.muted }, storePhone) : null,
-            supportEmail ? React.createElement(Text, { style: styles.muted }, supportEmail) : null
+              ? React.createElement(
+                  View,
+                  { style: reactPdfStyles.logoWrap },
+                  React.createElement(Image, { src: logoUrl, style: reactPdfStyles.logo })
+                )
+              : React.createElement(Text, { style: reactPdfStyles.storeName }, storeName),
+            storeName && logoUrl ? React.createElement(Text, { style: reactPdfStyles.storeName }, storeName) : null,
+            storeAddress ? React.createElement(Text, { style: reactPdfStyles.muted }, storeAddress) : null,
+            storePhone ? React.createElement(Text, { style: reactPdfStyles.muted }, storePhone) : null,
+            supportEmail ? React.createElement(Text, { style: reactPdfStyles.muted }, supportEmail) : null
           ),
           React.createElement(
             View,
-            { style: styles.invoiceBlock },
-            React.createElement(Text, { style: styles.invoiceLabel }, 'Invoice'),
-            React.createElement(Text, { style: styles.invoiceNumber }, `#${invoiceNumber}`),
-            React.createElement(Text, { style: styles.muted }, `Date: ${invoiceDate}`)
+            { style: reactPdfStyles.invoiceBlock },
+            React.createElement(Text, { style: reactPdfStyles.invoiceLabel }, 'Invoice'),
+            React.createElement(Text, { style: reactPdfStyles.invoiceCode }, `#${invoiceNumber}`),
+            React.createElement(Text, { style: reactPdfStyles.invoiceDate }, `Date: ${invoiceDate}`)
           )
         ),
 
         React.createElement(
           View,
-          { style: [styles.section, styles.twoCol] },
+          { style: [reactPdfStyles.section, reactPdfStyles.twoCol] },
           React.createElement(
             View,
-            { style: styles.col },
-            React.createElement(Text, { style: styles.sectionTitle }, 'Bill To'),
-            React.createElement(Text, { style: styles.strong }, customerName),
-            customerEmail ? React.createElement(Text, { style: styles.muted }, customerEmail) : null,
-            customerPhone ? React.createElement(Text, { style: styles.muted }, customerPhone) : null,
+            { style: [reactPdfStyles.col, reactPdfStyles.infoCard] },
+            React.createElement(Text, { style: reactPdfStyles.sectionTitle }, 'Bill To'),
+            React.createElement(View, { style: reactPdfStyles.sectionRule }),
+            React.createElement(Text, { style: reactPdfStyles.strong }, customerName),
+            customerEmail ? React.createElement(Text, { style: reactPdfStyles.muted }, customerEmail) : null,
+            customerPhone ? React.createElement(Text, { style: reactPdfStyles.muted }, customerPhone) : null,
             addressLines.length
-              ? React.createElement(Text, { style: styles.muted }, addressLines.join(', '))
+              ? React.createElement(Text, { style: reactPdfStyles.muted }, addressLines.join(', '))
               : null
           ),
           React.createElement(
             View,
-            { style: styles.col },
-            React.createElement(Text, { style: styles.sectionTitle }, 'Invoice Details'),
+            { style: [reactPdfStyles.col, reactPdfStyles.infoCard] },
+            React.createElement(Text, { style: reactPdfStyles.sectionTitle }, 'Invoice Details'),
+            React.createElement(View, { style: reactPdfStyles.sectionRule }),
             React.createElement(
               View,
-              { style: styles.summaryRow },
-              React.createElement(Text, { style: styles.muted }, 'Payment Status'),
-              React.createElement(Text, { style: styles.strong }, paymentStatus)
+              { style: reactPdfStyles.summaryRow },
+              React.createElement(Text, { style: reactPdfStyles.muted }, 'Payment Status'),
+              React.createElement(Text, { style: reactPdfStyles.strong }, paymentStatus)
             ),
             React.createElement(
               View,
-              { style: styles.summaryRow },
-              React.createElement(Text, { style: styles.muted }, 'Payment Method'),
-              React.createElement(Text, { style: styles.strong }, paymentMethod)
+              { style: reactPdfStyles.summaryRow },
+              React.createElement(Text, { style: reactPdfStyles.muted }, 'Payment Method'),
+              React.createElement(Text, { style: reactPdfStyles.strong }, paymentMethod)
             )
           )
         ),
 
-        React.createElement(Text, { style: styles.sectionTitle }, 'Items'),
+        React.createElement(Text, { style: reactPdfStyles.sectionTitle }, 'Items'),
         React.createElement(
           View,
-          { style: styles.table },
+          { style: reactPdfStyles.table },
           React.createElement(
             View,
-            { style: styles.tableHeader },
-            React.createElement(Text, { style: [styles.th, styles.cellDesc] }, 'Description'),
-            React.createElement(Text, { style: [styles.th, styles.cellVar] }, 'Variant'),
-            React.createElement(Text, { style: [styles.th, styles.cellQty] }, 'Qty'),
-            React.createElement(Text, { style: [styles.th, styles.cellUnit] }, 'Unit Price'),
-            React.createElement(Text, { style: [styles.th, styles.cellTotal] }, 'Amount')
+            { style: reactPdfStyles.tableHeader },
+            React.createElement(Text, { style: [reactPdfStyles.th, reactPdfStyles.cellDesc] }, 'Description'),
+            React.createElement(Text, { style: [reactPdfStyles.th, reactPdfStyles.cellVar] }, 'Variant'),
+            React.createElement(Text, { style: [reactPdfStyles.th, reactPdfStyles.cellQty] }, 'Qty'),
+            React.createElement(Text, { style: [reactPdfStyles.th, reactPdfStyles.cellUnit] }, 'Unit Price'),
+            React.createElement(Text, { style: [reactPdfStyles.th, reactPdfStyles.cellTotal] }, 'Amount')
           ),
           itemRows.length
             ? itemRows.map((item, idx) =>
                 React.createElement(
                   View,
-                  { style: styles.tableRow, key: `${item.id || idx}` },
-                  React.createElement(Text, { style: [styles.td, styles.cellDesc] }, item.product_name || ''),
-                  React.createElement(Text, { style: [styles.td, styles.cellVar] }, item.variant_name || '-'),
-                  React.createElement(Text, { style: [styles.td, styles.cellQty] }, String(item.quantity || 0)),
-                  React.createElement(Text, { style: [styles.td, styles.cellUnit] }, formatCurrency(item.unit_price, currency)),
-                  React.createElement(Text, { style: [styles.td, styles.cellTotal] }, formatCurrency(item.total_price, currency))
+                  { style: reactPdfStyles.tableRow, key: `${item.id || idx}` },
+                  React.createElement(Text, { style: [reactPdfStyles.td, reactPdfStyles.cellDesc] }, item.product_name || ''),
+                  React.createElement(Text, { style: [reactPdfStyles.td, reactPdfStyles.cellVar] }, item.variant_name || '-'),
+                  React.createElement(Text, { style: [reactPdfStyles.td, reactPdfStyles.cellQty] }, String(item.quantity || 0)),
+                  React.createElement(Text, { style: [reactPdfStyles.td, reactPdfStyles.cellUnit] }, formatCurrency(item.unit_price, currency)),
+                  React.createElement(Text, { style: [reactPdfStyles.td, reactPdfStyles.cellTotal] }, formatCurrency(item.total_price, currency))
                 )
               )
             : React.createElement(
                 View,
-                { style: styles.tableRow },
-                React.createElement(Text, { style: styles.td }, 'No items')
+                { style: reactPdfStyles.tableRow },
+                React.createElement(Text, { style: reactPdfStyles.td }, 'No items')
               )
         ),
 
         React.createElement(
           View,
-          { style: styles.summaryWrap },
+          { style: reactPdfStyles.summaryWrap },
           React.createElement(
             View,
-            { style: styles.summary },
+            { style: reactPdfStyles.summary },
             React.createElement(
               View,
-              { style: styles.summaryRow },
-              React.createElement(Text, { style: styles.muted }, 'Subtotal'),
+              { style: reactPdfStyles.summaryRow },
+              React.createElement(Text, { style: reactPdfStyles.muted }, 'Subtotal'),
               React.createElement(Text, null, formatCurrency(order.subtotal, currency))
             ),
             React.createElement(
               View,
-              { style: styles.summaryRow },
-              React.createElement(Text, { style: styles.muted }, 'Shipping'),
+              { style: reactPdfStyles.summaryRow },
+              React.createElement(Text, { style: reactPdfStyles.muted }, 'Shipping'),
               React.createElement(Text, null, formatCurrency(order.shipping_fee, currency))
             ),
             React.createElement(
               View,
-              { style: styles.summaryRow },
-              React.createElement(Text, { style: styles.muted }, 'Tax'),
+              { style: reactPdfStyles.summaryRow },
+              React.createElement(Text, { style: reactPdfStyles.muted }, 'Tax'),
               React.createElement(Text, null, formatCurrency(order.tax_amount, currency))
             ),
             order.discount_amount
               ? React.createElement(
                   View,
-                  { style: styles.summaryRow },
-                  React.createElement(Text, { style: styles.muted }, 'Discount'),
+                  { style: reactPdfStyles.summaryRow },
+                  React.createElement(Text, { style: reactPdfStyles.muted }, 'Discount'),
                   React.createElement(Text, null, `-${formatCurrency(order.discount_amount, currency)}`)
                 )
               : null,
             React.createElement(
               View,
-              { style: [styles.summaryRow, styles.totalRow] },
-              React.createElement(Text, { style: styles.strong }, 'Total Due'),
-              React.createElement(Text, { style: styles.strong }, formatCurrency(order.total_amount, currency))
+              { style: [reactPdfStyles.summaryRow, reactPdfStyles.totalRow] },
+              React.createElement(Text, { style: reactPdfStyles.strong }, 'Total Due'),
+              React.createElement(Text, { style: reactPdfStyles.strong }, formatCurrency(order.total_amount, currency))
             )
           )
         ),
 
         React.createElement(
           View,
-          { style: styles.footer },
+          { style: reactPdfStyles.footer },
           React.createElement(
             View,
             null,
-            React.createElement(Text, { style: styles.strong }, storeName),
+            React.createElement(Text, { style: reactPdfStyles.strong }, storeName),
             storeAddress ? React.createElement(Text, null, storeAddress) : null,
             storePhone ? React.createElement(Text, null, `Tel: ${storePhone}`) : null,
             supportEmail ? React.createElement(Text, null, `Email: ${supportEmail}`) : null
           ),
-          React.createElement(Text, { style: styles.muted }, 'Thank you for your business')
+          React.createElement(Text, { style: reactPdfStyles.muted }, 'Thank you for your business')
         )
       )
     )
   );
 }
-
-module.exports = { InvoiceDocument };
+module.exports = { createInvoiceDocument };

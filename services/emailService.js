@@ -218,10 +218,13 @@ class EmailService {
   }
 
   static async buildInvoicePdfBuffer({ order, items, payment, settings }) {
-    const { renderToBuffer } = await import('@react-pdf/renderer');
-    const { InvoiceDocument } = require('../pdf/InvoiceDocument');
+    const ReactModule = await import('react');
+    const React = ReactModule.default || ReactModule;
+    const renderer = await import('@react-pdf/renderer');
+    const { renderToBuffer } = renderer;
+    const { createInvoiceDocument } = require('../pdf/InvoiceDocument');
     return renderToBuffer(
-      InvoiceDocument({ order, items, payment, settings })
+      createInvoiceDocument({ React, renderer, order, items, payment, settings })
     );
   }
 
