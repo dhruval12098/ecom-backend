@@ -38,6 +38,7 @@ app.use('/api/faqs', require('./api/routes/faqs/route'));
 app.use('/api/support', require('./api/routes/support/route'));
 app.use('/api/settings', require('./api/routes/settings/route'));
 app.use('/api/announcement-bar', require('./api/routes/announcement-bar/route'));
+app.use('/api/admin-auth', require('./api/routes/admin-auth/route'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

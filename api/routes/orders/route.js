@@ -1,5 +1,6 @@
 const express = require('express');
 const { OrdersService } = require('../../../services/ordersService');
+const { EmailService } = require('../../../services/emailService');
 
 const router = express.Router();
 
@@ -56,6 +57,46 @@ router.get('/:id', async (req, res) => {
       success: false,
       error: error.message || 'Internal server error',
       message: 'Failed to fetch order'
+    });
+  }
+});
+
+// GET /api/orders/:id/invoice
+router.get('/:id/invoice', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid ID format',
+        message: 'ID must be a number'
+      });
+    }
+    const orderData = await OrdersService.getOrderById(id);
+    const settings = await EmailService.getSmtpSettings();
+    const payment = (orderData?.payments || [])[0] || null;
+    const invoicePdf = await EmailService.buildInvoicePdfBuffer({
+      order: orderData,
+      items: orderData.items || [],
+      payment,
+      settings
+    });
+    const invoiceNumber = orderData?.order_code || orderData?.order_number || orderData?.id || id;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="invoice-${invoiceNumber}.pdf"`);
+    res.send(invoicePdf);
+  } catch (error) {
+    if (error.message === 'Order not found') {
+      return res.status(404).json({
+        success: false,
+        error: 'Not found',
+        message: 'Order not found'
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Internal server error',
+      message: 'Failed to generate invoice'
     });
   }
 });

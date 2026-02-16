@@ -171,11 +171,13 @@ class OrdersService {
         note: 'Order created'
       });
 
-    try {
-      await EmailService.sendOrderConfirmation({ order, items: items || [], payment });
-    } catch (error) {
-      console.error('Failed to send order confirmation email:', error?.message || error);
-    }
+      setImmediate(async () => {
+        try {
+          await EmailService.sendOrderConfirmation({ order, items: items || [], payment });
+        } catch (error) {
+          console.error('Failed to send order confirmation email:', error?.message || error);
+        }
+      });
 
     return { order, items: items || [], payment };
   }
@@ -209,52 +211,74 @@ class OrdersService {
 
     const { data: payments } = await adminClient
       .from('payments')
-      .select('order_id, status')
+      .select('order_id, status, method')
       .in('order_id', orderIds);
 
     const paymentStatusByOrder = {};
+    const paymentMethodByOrder = {};
     (payments || []).forEach((p) => {
       if (!paymentStatusByOrder[p.order_id]) {
         paymentStatusByOrder[p.order_id] = p.status;
+      }
+      if (!paymentMethodByOrder[p.order_id]) {
+        paymentMethodByOrder[p.order_id] = p.method;
       }
     });
 
     return orders.map((o) => ({
       ...o,
       items_count: countByOrder[o.id] || 0,
-      payment_status: paymentStatusByOrder[o.id] || null
+      payment_status: paymentStatusByOrder[o.id] || null,
+      payment_method: paymentMethodByOrder[o.id] || null
     }));
   }
 
   static async getOrderById(id) {
     const adminClient = createAdminClient();
-    const { data: order, error } = await adminClient
+    let order = null;
+
+    const { data: byId, error: byIdError } = await adminClient
       .from('orders')
       .select('*')
-      .eq('id', id)
-      .single();
+      .eq('id', id);
 
-    if (error) {
-      throw new Error(`Database error: ${error.message}`);
+    if (byIdError) {
+      throw new Error(`Database error: ${byIdError.message}`);
     }
+
+    order = (byId || [])[0] || null;
+
+    if (!order) {
+      const { data: byNumber, error: byNumberError } = await adminClient
+        .from('orders')
+        .select('*')
+        .eq('order_number', id);
+
+      if (byNumberError) {
+        throw new Error(`Database error: ${byNumberError.message}`);
+      }
+
+      order = (byNumber || [])[0] || null;
+    }
+
     if (!order) throw new Error('Order not found');
 
     const { data: items } = await adminClient
       .from('order_items')
       .select('*')
-      .eq('order_id', id)
+      .eq('order_id', order.id)
       .order('id', { ascending: true });
 
     const { data: payments } = await adminClient
       .from('payments')
       .select('*')
-      .eq('order_id', id)
+      .eq('order_id', order.id)
       .order('id', { ascending: true });
 
     const { data: statusHistory } = await adminClient
       .from('order_status_history')
       .select('*')
-      .eq('order_id', id)
+      .eq('order_id', order.id)
       .order('changed_at', { ascending: true });
 
     return {
@@ -323,16 +347,28 @@ class OrdersService {
       await OrdersService.adjustStock(items || [], 'release');
     }
 
-    await adminClient
-      .from('order_status_history')
-      .insert({
-        order_id: id,
-        status,
-        note: note || 'Status updated'
-      });
+      await adminClient
+        .from('order_status_history')
+        .insert({
+          order_id: id,
+          status,
+          note: note || 'Status updated'
+        });
 
-    return updated;
-  }
+      if (shouldReserve && !wasReserved) {
+        setImmediate(async () => {
+          try {
+            const fullOrder = await OrdersService.getOrderById(id);
+            const payment = (fullOrder?.payments || [])[0] || null;
+            await EmailService.sendOrderConfirmation({ order: fullOrder, items: fullOrder.items || [], payment });
+          } catch (error) {
+            console.error('Failed to send order confirmation email:', error?.message || error);
+          }
+        });
+      }
+
+      return updated;
+    }
 
   static async adjustStock(items, mode = 'reserve') {
     const adminClient = createAdminClient();
