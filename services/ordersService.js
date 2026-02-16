@@ -79,6 +79,48 @@ class OrdersService {
 
     const adminClient = createAdminClient();
 
+    let appliedCoupon = null;
+    let couponPreviousUsedCount = null;
+    const couponCode = String(payload.coupon_code || '').trim();
+    if (couponCode) {
+      const { data: coupon, error: couponError } = await adminClient
+        .from('coupons')
+        .select('*')
+        .ilike('code', couponCode)
+        .maybeSingle();
+      if (couponError) {
+        throw new Error(`Database error: ${couponError.message}`);
+      }
+      if (!coupon) {
+        throw new Error('Coupon not found');
+      }
+      const status = String(coupon.status || '').toLowerCase();
+      if (status && status !== 'active') {
+        throw new Error('Coupon is not active');
+      }
+      if (coupon.expiry_date) {
+        const exp = new Date(coupon.expiry_date);
+        if (!Number.isNaN(exp.getTime()) && exp < new Date()) {
+          throw new Error('Coupon expired');
+        }
+      }
+      const usageLimit = coupon.usage_limit;
+      const usedCount = Number(coupon.used_count || 0);
+      if (usageLimit !== null && usageLimit !== undefined && usedCount >= Number(usageLimit)) {
+        throw new Error('Coupon usage limit reached');
+      }
+
+      const { error: updateError } = await adminClient
+        .from('coupons')
+        .update({ used_count: usedCount + 1 })
+        .eq('id', coupon.id);
+      if (updateError) {
+        throw new Error(`Database error: ${updateError.message}`);
+      }
+      appliedCoupon = coupon;
+      couponPreviousUsedCount = usedCount;
+    }
+
     const customer = await OrdersService.ensureCustomer({
       name: payload.customer_name,
       email: payload.customer_email,
@@ -90,34 +132,51 @@ class OrdersService {
       : OrdersService.generateOrderNumber();
     const orderCode = payload.order_code || OrdersService.generateOrderCode(orderNumber);
 
-    const { data: order, error: orderError } = await adminClient
-      .from('orders')
-      .insert({
-        order_number: orderNumber,
-        order_code: orderCode,
-        customer_id: payload.customer_id || (customer ? customer.id : null),
-        customer_name: payload.customer_name,
-        customer_email: payload.customer_email,
-        customer_phone: payload.customer_phone,
-        address_street: payload.address_street,
-        address_house: payload.address_house || null,
-        address_apartment: payload.address_apartment || null,
-        address_city: payload.address_city,
-        address_region: payload.address_region || null,
-        address_postal_code: payload.address_postal_code,
-        address_country: payload.address_country,
-        subtotal: payload.subtotal,
-        shipping_fee: payload.shipping_fee || 0,
-        tax_amount: payload.tax_amount || 0,
-        discount_amount: payload.discount_amount || 0,
-        total_amount: payload.total_amount,
-        status: payload.status || 'pending'
-      })
-      .select()
-      .single();
+    let order;
+    try {
+      const { data: created, error: orderError } = await adminClient
+        .from('orders')
+        .insert({
+          order_number: orderNumber,
+          order_code: orderCode,
+          customer_id: payload.customer_id || (customer ? customer.id : null),
+          customer_name: payload.customer_name,
+          customer_email: payload.customer_email,
+          customer_phone: payload.customer_phone,
+          address_street: payload.address_street,
+          address_house: payload.address_house || null,
+          address_apartment: payload.address_apartment || null,
+          address_city: payload.address_city,
+          address_region: payload.address_region || null,
+          address_postal_code: payload.address_postal_code,
+          address_country: payload.address_country,
+          subtotal: payload.subtotal,
+          shipping_fee: payload.shipping_fee || 0,
+          tax_amount: payload.tax_amount || 0,
+          discount_amount: payload.discount_amount || 0,
+          total_amount: payload.total_amount,
+          status: payload.status || 'pending',
+          coupon_code: couponCode || null
+        })
+        .select()
+        .single();
 
-    if (orderError) {
-      throw new Error(`Database error: ${orderError.message}`);
+      if (orderError) {
+        throw new Error(`Database error: ${orderError.message}`);
+      }
+      order = created;
+    } catch (err) {
+      if (appliedCoupon && couponPreviousUsedCount !== null) {
+        try {
+          await adminClient
+            .from('coupons')
+            .update({ used_count: couponPreviousUsedCount })
+            .eq('id', appliedCoupon.id);
+        } catch {
+          // ignore rollback failure
+        }
+      }
+      throw err;
     }
 
     const itemsPayload = payload.items.map((item) => ({
@@ -169,14 +228,6 @@ class OrdersService {
         order_id: order.id,
         status: order.status,
         note: 'Order created'
-      });
-
-      setImmediate(async () => {
-        try {
-          await EmailService.sendOrderConfirmation({ order, items: items || [], payment });
-        } catch (error) {
-          console.error('Failed to send order confirmation email:', error?.message || error);
-        }
       });
 
     return { order, items: items || [], payment };
@@ -360,7 +411,12 @@ class OrdersService {
           try {
             const fullOrder = await OrdersService.getOrderById(id);
             const payment = (fullOrder?.payments || [])[0] || null;
-            await EmailService.sendOrderConfirmation({ order: fullOrder, items: fullOrder.items || [], payment });
+            await EmailService.sendOrderConfirmation({
+              order: fullOrder,
+              items: fullOrder.items || [],
+              payment,
+              includeInvoicePdf: true
+            });
           } catch (error) {
             console.error('Failed to send order confirmation email:', error?.message || error);
           }

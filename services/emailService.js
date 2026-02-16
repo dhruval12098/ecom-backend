@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
-const pdf = require('html-pdf-node');
+const { renderToBuffer } = require('@react-pdf/renderer');
+const { InvoiceDocument } = require('../pdf/InvoiceDocument');
 const { createAdminClient } = require('../supabase/config/supabaseClient');
 
 class EmailService {
@@ -219,19 +220,9 @@ class EmailService {
   }
 
   static async buildInvoicePdfBuffer({ order, items, payment, settings }) {
-    const html = EmailService.buildInvoiceHtml({ order, items, payment, settings });
-    const file = { content: html };
-    const options = {
-      format: 'A4',
-      printBackground: true,
-      margin: {
-        top: '20mm',
-        right: '15mm',
-        bottom: '20mm',
-        left: '15mm'
-      }
-    };
-    return pdf.generatePdf(file, options);
+    return renderToBuffer(
+      InvoiceDocument({ order, items, payment, settings })
+    );
   }
 
   static buildOrderEmail({ order, items, payment, settings }) {
@@ -417,7 +408,7 @@ class EmailService {
     `;
   }
 
-  static async sendOrderConfirmation({ order, items, payment }) {
+  static async sendOrderConfirmation({ order, items, payment, includeInvoicePdf = false }) {
     const settings = await EmailService.getSmtpSettings();
     const transport = EmailService.buildTransport(settings);
     if (!transport) return { skipped: true, reason: 'SMTP not configured' };
@@ -428,21 +419,26 @@ class EmailService {
     if (!toEmail) return { skipped: true, reason: 'Missing customer email' };
 
     const html = EmailService.buildOrderEmail({ order, items, payment, settings });
-    const invoicePdf = await EmailService.buildInvoicePdfBuffer({ order, items, payment, settings });
-    const invoiceNumber = order?.order_code || order?.order_number || order?.id || 'invoice';
-    await transport.sendMail({
+    const mail = {
       from: `${fromName} <${fromEmail}>`,
       to: toEmail,
       subject: `Order confirmation ${order.order_code || order.order_number}`,
-      html,
-      attachments: [
+      html
+    };
+
+    if (includeInvoicePdf) {
+      const invoicePdf = await EmailService.buildInvoicePdfBuffer({ order, items, payment, settings });
+      const invoiceNumber = order?.order_code || order?.order_number || order?.id || 'invoice';
+      mail.attachments = [
         {
           filename: `invoice-${invoiceNumber}.pdf`,
           content: invoicePdf,
           contentType: 'application/pdf'
         }
-      ]
-    });
+      ];
+    }
+
+    await transport.sendMail(mail);
 
     return { sent: true };
   }
