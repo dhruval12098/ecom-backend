@@ -1,6 +1,4 @@
 const nodemailer = require('nodemailer');
-const { renderToBuffer } = require('@react-pdf/renderer');
-const { InvoiceDocument } = require('../pdf/InvoiceDocument');
 const { createAdminClient } = require('../supabase/config/supabaseClient');
 
 class EmailService {
@@ -220,6 +218,8 @@ class EmailService {
   }
 
   static async buildInvoicePdfBuffer({ order, items, payment, settings }) {
+    const { renderToBuffer } = await import('@react-pdf/renderer');
+    const { InvoiceDocument } = require('../pdf/InvoiceDocument');
     return renderToBuffer(
       InvoiceDocument({ order, items, payment, settings })
     );
