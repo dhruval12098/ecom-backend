@@ -423,6 +423,17 @@ class OrdersService {
         });
       }
 
+      if (normalized === 'cancelled' && previous !== 'cancelled') {
+        setImmediate(async () => {
+          try {
+            const fullOrder = await OrdersService.getOrderById(id);
+            await EmailService.sendOrderCancellation({ order: fullOrder });
+          } catch (error) {
+            console.error('Failed to send order cancellation email:', error?.message || error);
+          }
+        });
+      }
+
       return updated;
     }
 
