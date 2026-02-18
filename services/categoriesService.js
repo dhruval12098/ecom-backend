@@ -46,17 +46,26 @@ class CategoriesService {
       throw new Error('Name and slug are required');
     }
 
+    const payload = {
+      name: categoryData.name,
+      slug: categoryData.slug,
+      updated_at: new Date().toISOString()
+    };
+
+    if (categoryData.description !== undefined) {
+      payload.description = categoryData.description || null;
+    }
+    if (categoryData.imageUrl !== undefined) {
+      payload.image_url = categoryData.imageUrl || null;
+    }
+    if (categoryData.sortOrder !== undefined) {
+      payload.sort_order = categoryData.sortOrder || 0;
+    }
+
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
       .from('categories')
-      .update({
-        name: categoryData.name,
-        slug: categoryData.slug,
-        description: categoryData.description || null,
-        image_url: categoryData.imageUrl || null,
-        sort_order: categoryData.sortOrder || 0,
-        updated_at: new Date().toISOString()
-      })
+      .update(payload)
       .eq('id', id)
       .select()
       .single();
