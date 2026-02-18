@@ -33,6 +33,7 @@ app.use('/api/customers', require('./api/routes/customers/route'));
 app.use('/api/payments', require('./api/routes/payments/route'));
 app.use('/api/shipping-rates', require('./api/routes/shipping-rates/route'));
 app.use('/api/customer-addresses', require('./api/routes/customer-addresses/route'));
+app.use('/api/product-reviews', require('./api/routes/product-reviews/route'));
 app.use('/api/homepage-sections', require('./api/routes/homepage-sections/route'));
 app.use('/api/faqs', require('./api/routes/faqs/route'));
 app.use('/api/support', require('./api/routes/support/route'));
