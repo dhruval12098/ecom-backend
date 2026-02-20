@@ -31,7 +31,41 @@ class ProductsService {
       throw new Error('Product not found');
     }
 
-    return data;
+    let subcategory = null;
+    let category = null;
+
+    if (data.subcategory_id) {
+      const { data: sub, error: subErr } = await adminClient
+        .from('subcategories')
+        .select('*')
+        .eq('id', data.subcategory_id)
+        .single();
+      if (subErr) {
+        throw new Error(`Database error: ${subErr.message}`);
+      }
+      subcategory = sub || null;
+
+      if (subcategory?.category_id) {
+        const { data: cat, error: catErr } = await adminClient
+          .from('categories')
+          .select('*')
+          .eq('id', subcategory.category_id)
+          .single();
+        if (catErr) {
+          throw new Error(`Database error: ${catErr.message}`);
+        }
+        category = cat || null;
+      }
+    }
+
+    return {
+      ...data,
+      category_id: category?.id ?? null,
+      category_slug: category?.slug || null,
+      category_name: category?.name || null,
+      subcategory_slug: subcategory?.slug || null,
+      subcategory_name: subcategory?.name || null
+    };
   }
 
   static async getProductBySlug(slug) {
