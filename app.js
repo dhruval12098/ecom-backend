@@ -7,7 +7,13 @@ const app = express();
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({
+  verify: (req, res, buf) => {
+    if (buf && buf.length) {
+      req.rawBody = buf;
+    }
+  }
+}));
 app.use(express.urlencoded({ extended: true }));
 
 // Serve static files from public directory if needed
@@ -40,6 +46,7 @@ app.use('/api/support', require('./api/routes/support/route'));
 app.use('/api/settings', require('./api/routes/settings/route'));
 app.use('/api/announcement-bar', require('./api/routes/announcement-bar/route'));
 app.use('/api/admin-auth', require('./api/routes/admin-auth/route'));
+app.use('/api/worldline', require('./api/routes/worldline/route'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
