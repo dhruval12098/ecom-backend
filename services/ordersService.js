@@ -1,5 +1,6 @@
 const { createAdminClient } = require('../supabase/config/supabaseClient');
 const { EmailService } = require('./emailService');
+const { DeliveryZonesService } = require('./deliveryZonesService');
 
 class OrdersService {
   static generateOrderNumber() {
@@ -76,6 +77,12 @@ class OrdersService {
     if (!Array.isArray(payload.items) || payload.items.length === 0) {
       throw new Error('Order items are required');
     }
+
+    await DeliveryZonesService.assertAddressAllowed({
+      country: payload.address_country,
+      city: payload.address_city,
+      postal_code: payload.address_postal_code
+    });
 
     const adminClient = createAdminClient();
 

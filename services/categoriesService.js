@@ -1,5 +1,8 @@
 const { createAdminClient } = require('../supabase/config/supabaseClient');
 
+const normalizeStatus = (value) => String(value || '').toLowerCase().trim();
+const isValidStatus = (value) => value === 'active' || value === 'inactive';
+
 class CategoriesService {
   static async getAllCategories() {
     const adminClient = createAdminClient();
@@ -20,6 +23,10 @@ class CategoriesService {
     if (!categoryData.name || !categoryData.slug) {
       throw new Error('Name and slug are required');
     }
+    const status = normalizeStatus(categoryData.status || 'active');
+    if (!isValidStatus(status)) {
+      throw new Error('Invalid status value');
+    }
 
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
@@ -29,7 +36,8 @@ class CategoriesService {
         slug: categoryData.slug,
         description: categoryData.description || null,
         image_url: categoryData.imageUrl || null,
-        sort_order: categoryData.sortOrder || 0
+        sort_order: categoryData.sortOrder || 0,
+        status
       })
       .select()
       .single();
@@ -60,6 +68,13 @@ class CategoriesService {
     }
     if (categoryData.sortOrder !== undefined) {
       payload.sort_order = categoryData.sortOrder || 0;
+    }
+    if (categoryData.status !== undefined) {
+      const status = normalizeStatus(categoryData.status);
+      if (!isValidStatus(status)) {
+        throw new Error('Invalid status value');
+      }
+      payload.status = status;
     }
 
     const adminClient = createAdminClient();

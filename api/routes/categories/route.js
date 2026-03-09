@@ -20,7 +20,9 @@ const upload = multer({
 // GET /api/categories - nested catalog
 router.get('/', async (req, res) => {
   try {
-    const data = await CatalogService.getCatalog();
+    const includeInactive = String(req.query.includeInactive || '').toLowerCase() === 'true';
+    const includeEmpty = String(req.query.includeEmpty || '').toLowerCase() === 'true';
+    const data = await CatalogService.getCatalog({ includeInactive, includeEmpty });
     res.json({
       success: true,
       data,

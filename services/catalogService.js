@@ -1,7 +1,9 @@
 const { createAdminClient } = require('../supabase/config/supabaseClient');
 
 class CatalogService {
-  static async getCatalog() {
+  static async getCatalog(options = {}) {
+    const includeInactive = options.includeInactive === true;
+    const includeEmpty = options.includeEmpty === true;
     const adminClient = createAdminClient();
     const [{ data: categories, error: catErr }, { data: subcategories, error: subErr }, { data: products, error: prodErr }, { data: productImages, error: imgErr }, { data: variants, error: varErr }] =
       await Promise.all([
@@ -17,8 +19,12 @@ class CatalogService {
       throw new Error(`Database error: ${err.message}`);
     }
 
+    const normalizeStatus = (value) => String(value || '').toLowerCase().trim();
+    const isActiveStatus = (value) => normalizeStatus(value) === 'active';
+
+    const filteredProducts = includeInactive ? products : products.filter(p => isActiveStatus(p.status));
     const productsBySub = new Map();
-    products.forEach(product => {
+    filteredProducts.forEach(product => {
       const list = productsBySub.get(product.subcategory_id) || [];
       const gallery = productImages.filter(img => img.product_id === product.id).map(img => img.image_url);
       const productVariants = variants.filter(v => v.product_id === product.id).map(v => ({
@@ -57,25 +63,42 @@ class CatalogService {
 
     const subcategoriesByCategory = new Map();
     subcategories.forEach(sub => {
+      const productsForSub = productsBySub.get(sub.id) || [];
+      if (!includeEmpty && productsForSub.length === 0) {
+        return;
+      }
       const list = subcategoriesByCategory.get(sub.category_id) || [];
       list.push({
         id: sub.id,
         name: sub.name,
         slug: sub.slug,
         image: sub.image_url,
-        products: productsBySub.get(sub.id) || []
+        products: productsForSub
       });
       subcategoriesByCategory.set(sub.category_id, list);
     });
 
-    const catalog = categories.map(cat => ({
-      id: cat.id,
-      name: cat.name,
-      slug: cat.slug,
-      description: cat.description,
-      image: cat.image_url,
-      subcategories: subcategoriesByCategory.get(cat.id) || []
-    }));
+    const filteredCategories = includeInactive
+      ? categories
+      : categories.filter(cat => isActiveStatus(cat.status));
+
+    const catalog = filteredCategories
+      .map(cat => {
+        const subcats = subcategoriesByCategory.get(cat.id) || [];
+        if (!includeEmpty && subcats.length === 0) {
+          return null;
+        }
+        return {
+          id: cat.id,
+          name: cat.name,
+          slug: cat.slug,
+          description: cat.description,
+          image: cat.image_url,
+          status: cat.status,
+          subcategories: subcats
+        };
+      })
+      .filter(Boolean);
 
     return catalog;
   }

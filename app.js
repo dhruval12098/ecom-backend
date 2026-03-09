@@ -1,4 +1,6 @@
-require('dotenv').config();
+const dotenv = require('dotenv');
+dotenv.config({ path: '.env.local' });
+dotenv.config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -35,9 +37,11 @@ app.use('/api/scheduled-pricing', require('./api/routes/scheduled-pricing/route'
 app.use('/api/coupons', require('./api/routes/coupons/route'));
 app.use('/api/storage', require('./api/routes/storage/route'));
 app.use('/api/orders', require('./api/routes/orders/route'));
+app.use('/api/guest-orders', require('./api/routes/guest-orders/route'));
 app.use('/api/customers', require('./api/routes/customers/route'));
 app.use('/api/payments', require('./api/routes/payments/route'));
 app.use('/api/shipping-rates', require('./api/routes/shipping-rates/route'));
+app.use('/api/delivery-zones', require('./api/routes/delivery-zones/route'));
 app.use('/api/customer-addresses', require('./api/routes/customer-addresses/route'));
 app.use('/api/product-reviews', require('./api/routes/product-reviews/route'));
 app.use('/api/homepage-sections', require('./api/routes/homepage-sections/route'));
@@ -47,6 +51,7 @@ app.use('/api/settings', require('./api/routes/settings/route'));
 app.use('/api/announcement-bar', require('./api/routes/announcement-bar/route'));
 app.use('/api/admin-auth', require('./api/routes/admin-auth/route'));
 app.use('/api/worldline', require('./api/routes/worldline/route'));
+app.use('/api/shippo', require('./api/routes/shippo/route'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

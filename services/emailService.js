@@ -631,6 +631,82 @@ class EmailService {
     await transport.sendMail(mail);
     return { sent: true };
   }
+
+  static buildGuestOrdersOtpEmail({ code, settings }) {
+    const storeName = settings?.store_name || 'Your Store';
+    const supportEmail = settings?.support_email || settings?.smtp_email || '';
+    const logoUrl = settings?.logo_url || '';
+    const otp = String(code || '').trim();
+
+    return `
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+        </head>
+        <body style="margin:0; padding:0; background:#f9fafb; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb; padding:32px 0;">
+            <tr>
+              <td align="center">
+                <table width="640" cellpadding="0" cellspacing="0" style="background:#ffffff; border:1px solid #e5e7eb;">
+                  <tr>
+                    <td style="padding:28px 36px; border-bottom:2px solid #111827;">
+                      <table width="100%" cellpadding="0" cellspacing="0">
+                        <tr>
+                          <td style="vertical-align:middle;">
+                            ${logoUrl ? `<img src="${logoUrl}" alt="${storeName}" style="height:36px; object-fit:contain;" />` : `<div style="font-size:20px; font-weight:700; color:#111827;">${storeName}</div>`}
+                          </td>
+                          <td style="text-align:right; vertical-align:middle;">
+                            <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#6b7280;">Order Lookup</div>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td style="padding:32px 36px;">
+                      <h2 style="margin:0 0 10px; font-size:22px; font-weight:700; color:#111827;">Your verification code</h2>
+                      <p style="margin:0 0 20px; font-size:14px; color:#6b7280;">Use this code to view your guest orders. This code will expire soon.</p>
+
+                      <div style="border:1px dashed #111827; border-radius:8px; padding:16px; text-align:center; font-size:28px; font-weight:700; letter-spacing:6px; color:#111827;">
+                        ${otp || '------'}
+                      </div>
+
+                      ${supportEmail ? `<p style="margin:20px 0 0; font-size:13px; color:#6b7280;">Support: ${supportEmail}</p>` : ''}
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </body>
+      </html>
+    `;
+  }
+
+  static async sendGuestOrdersOtp({ email, code }) {
+    const settings = await EmailService.getSmtpSettings();
+    const transport = EmailService.buildTransport(settings);
+    if (!transport) return { skipped: true, reason: 'SMTP not configured' };
+
+    const fromName = settings?.store_name || 'Store';
+    const fromEmail = settings?.smtp_email;
+    const toEmail = email;
+    if (!toEmail) return { skipped: true, reason: 'Missing email' };
+
+    const html = EmailService.buildGuestOrdersOtpEmail({ code, settings });
+    const mail = {
+      from: `${fromName} <${fromEmail}>`,
+      to: toEmail,
+      subject: 'Your verification code',
+      html
+    };
+
+    await transport.sendMail(mail);
+    return { sent: true };
+  }
 }
 
 module.exports = { EmailService };
