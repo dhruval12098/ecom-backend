@@ -441,6 +441,21 @@ class OrdersService {
         });
       }
 
+      if (normalized !== previous) {
+        setImmediate(async () => {
+          try {
+            const fullOrder = await OrdersService.getOrderById(id);
+            await EmailService.sendOrderStatusUpdate({
+              order: fullOrder,
+              status,
+              note
+            });
+          } catch (error) {
+            console.error('Failed to send status update email:', error?.message || error);
+          }
+        });
+      }
+
       return updated;
     }
 

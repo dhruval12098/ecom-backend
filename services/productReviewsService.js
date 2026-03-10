@@ -120,13 +120,14 @@ class ProductReviewsService {
     const adminClient = createAdminClient();
 
     const productId = Number(payload.product_id);
-    const orderId = Number(payload.order_id);
-    const orderItemId = Number(payload.order_item_id);
+    const orderIdRaw = payload.order_id;
+    const orderId = Number(orderIdRaw);
+    let orderItemId = Number(payload.order_item_id);
     const rating = Number(payload.rating);
     const reviewText = payload.review_text || null;
 
-    if (!productId || !orderId || !orderItemId) {
-      throw new Error('product_id, order_id, and order_item_id are required');
+    if (!orderId) {
+      throw new Error('order_id is required');
     }
     if (!rating || rating < 1 || rating > 5) {
       throw new Error('rating must be between 1 and 5');
@@ -146,36 +147,109 @@ class ProductReviewsService {
       customer = customerData || null;
     }
 
-    if (!customer) {
+    if (!customer && authUserId) {
       throw new Error('Customer not found for this user');
     }
 
-    const { data: order, error: orderError } = await adminClient
+    const orderQuery = adminClient
       .from('orders')
-      .select('id, customer_id')
-      .eq('id', orderId)
-      .single();
+      .select('id, order_number, order_code, customer_id, customer_email')
+      .limit(1);
+    let order = null;
+    let orderError = null;
+    if (Number.isFinite(orderId) && orderId > 0) {
+      const result = await orderQuery.eq('id', orderId).maybeSingle();
+      order = result.data || null;
+      orderError = result.error || null;
+    }
+    if (!order && !orderError) {
+      const rawString = orderIdRaw !== undefined && orderIdRaw !== null ? String(orderIdRaw).trim() : '';
+      const digitsOnly = rawString.replace(/\D/g, '');
+      const numericCandidate = digitsOnly ? Number(digitsOnly) : Number(rawString);
+      const resultNumber = Number.isFinite(numericCandidate)
+        ? await orderQuery.eq('order_number', numericCandidate).maybeSingle()
+        : { data: null, error: null };
+      order = resultNumber.data || null;
+      orderError = resultNumber.error || null;
+      if (!order && !orderError && rawString) {
+        const resultString = await orderQuery.eq('order_number', rawString).maybeSingle();
+        order = resultString.data || null;
+        orderError = resultString.error || null;
+      }
+      if (!order && !orderError && digitsOnly) {
+        const resultDigits = await orderQuery.eq('order_number', digitsOnly).maybeSingle();
+        order = resultDigits.data || null;
+        orderError = resultDigits.error || null;
+      }
+      if (!order && !orderError && rawString) {
+        const resultCode = await orderQuery.eq('order_code', rawString).maybeSingle();
+        order = resultCode.data || null;
+        orderError = resultCode.error || null;
+      }
+      if (!order && !orderError && rawString) {
+        const { data: listData, error: listError } = await adminClient
+          .from('orders')
+          .select('id, order_number, order_code, customer_id, customer_email')
+          .order('id', { ascending: false })
+          .limit(500);
+        if (listError) {
+          throw new Error(`Database error: ${listError.message}`);
+        }
+        const match = (listData || []).find((row) => {
+          const num = row.order_number !== null && row.order_number !== undefined ? String(row.order_number).trim() : '';
+          const code = row.order_code !== null && row.order_code !== undefined ? String(row.order_code).trim() : '';
+          return (digitsOnly && num === digitsOnly) || (rawString && (num === rawString || code === rawString));
+        });
+        order = match || null;
+      }
+    }
 
     if (orderError) {
       throw new Error(`Database error: ${orderError.message}`);
     }
+    if (!order) {
+      throw new Error('Order not found');
+    }
 
-    if (!order || Number(order.customer_id) !== Number(customer.id)) {
+    if (customer && Number(order.customer_id) !== Number(customer.id)) {
       throw new Error('Order does not belong to this customer');
     }
+    const resolvedOrderId = Number(order.id);
 
-    const { data: item, error: itemError } = await adminClient
-      .from('order_items')
-      .select('id, order_id, product_id')
-      .eq('id', orderItemId)
-      .single();
+    let item = null;
+    if (orderItemId) {
+      const { data: found, error: itemError } = await adminClient
+        .from('order_items')
+        .select('id, order_id, product_id')
+        .eq('id', orderItemId)
+        .limit(1)
+        .maybeSingle();
 
-    if (itemError) {
-      throw new Error(`Database error: ${itemError.message}`);
+      if (itemError) {
+        throw new Error(`Database error: ${itemError.message}`);
+      }
+      item = found || null;
+    } else {
+      const { data: firstItem, error: firstError } = await adminClient
+        .from('order_items')
+        .select('id, order_id, product_id')
+        .eq('order_id', resolvedOrderId)
+        .order('id', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (firstError) {
+        throw new Error(`Database error: ${firstError.message}`);
+      }
+      item = firstItem || null;
+      orderItemId = item?.id ? Number(item.id) : 0;
     }
 
-    if (!item || Number(item.order_id) !== orderId || Number(item.product_id) !== productId) {
-      throw new Error('Order item does not match product or order');
+    const resolvedProductId = Number(item?.product_id || 0);
+    if (!item || Number(item.order_id) !== resolvedOrderId) {
+      throw new Error('Order item does not match order');
+    }
+    if (productId && resolvedProductId !== productId) {
+      throw new Error('Order item does not match product');
     }
 
     const { data: existing } = await adminClient
@@ -191,12 +265,12 @@ class ProductReviewsService {
     const { data: created, error: createError } = await adminClient
       .from('product_reviews')
       .insert({
-        product_id: productId,
-        order_id: orderId,
+        product_id: productId || resolvedProductId,
+        order_id: resolvedOrderId,
         order_item_id: orderItemId,
-        customer_id: customer.id,
-        reviewer_name: payload.reviewer_name || customer.full_name || null,
-        reviewer_email: payload.reviewer_email || customer.email || null,
+        customer_id: customer ? customer.id : null,
+        reviewer_name: payload.reviewer_name || customer?.full_name || null,
+        reviewer_email: payload.reviewer_email || customer?.email || null,
         rating,
         review_text: reviewText,
         image_url: payload.image_url || null,

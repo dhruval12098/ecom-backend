@@ -39,7 +39,15 @@ router.get('/', async (req, res) => {
 // GET /api/products/slug/:slug
 router.get('/slug/:slug', async (req, res) => {
   try {
-    const slug = req.params.slug;
+    const rawSlug = req.params.slug;
+    let slug = rawSlug;
+    if (rawSlug && rawSlug.includes('%')) {
+      try {
+        slug = decodeURIComponent(rawSlug);
+      } catch {
+        slug = rawSlug;
+      }
+    }
     if (!slug) {
       return res.status(400).json({
         success: false,

@@ -39,6 +39,17 @@ class SettingsService {
       maintenance_enabled: hasOwn('maintenance_enabled') ? payload.maintenance_enabled : existing?.maintenance_enabled,
       maintenance_message: hasOwn('maintenance_message') ? payload.maintenance_message : existing?.maintenance_message,
       shipping_note: hasOwn('shipping_note') ? payload.shipping_note : existing?.shipping_note,
+      delivery_schedule_enabled: hasOwn('delivery_schedule_enabled')
+        ? payload.delivery_schedule_enabled
+        : existing?.delivery_schedule_enabled,
+      order_accept_days: hasOwn('order_accept_days') ? payload.order_accept_days : existing?.order_accept_days,
+      delivery_days: hasOwn('delivery_days') ? payload.delivery_days : existing?.delivery_days,
+      delivery_time_window: hasOwn('delivery_time_window')
+        ? payload.delivery_time_window
+        : existing?.delivery_time_window,
+      delivery_time_blocks: hasOwn('delivery_time_blocks')
+        ? payload.delivery_time_blocks
+        : existing?.delivery_time_blocks,
       logo_url: hasOwn('logo_url') ? payload.logo_url : existing?.logo_url,
       excluded_free_shipping_category_ids: hasOwn('excluded_free_shipping_category_ids')
         ? payload.excluded_free_shipping_category_ids

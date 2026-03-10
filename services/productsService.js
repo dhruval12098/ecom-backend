@@ -74,9 +74,9 @@ class ProductsService {
       .from('products')
       .select('*')
       .eq('slug', slug)
-      .single();
+      .maybeSingle();
 
-    if (error) {
+    if (error && error.code !== 'PGRST116') {
       throw new Error(`Database error: ${error.message}`);
     }
 

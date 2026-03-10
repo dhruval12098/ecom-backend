@@ -553,6 +553,76 @@ class EmailService {
     `;
   }
 
+  static buildOrderStatusUpdateEmail({ order, status, note, settings }) {
+    const storeName = settings?.store_name || 'Your Store';
+    const supportEmail = settings?.support_email || settings?.smtp_email || '';
+    const logoUrl = settings?.logo_url || '';
+    const orderNumber = order?.order_code || order?.order_number || order?.id || '';
+    const customerName = order?.customer_name || 'Customer';
+    const safeStatus = String(status || order?.status || '').trim() || 'Updated';
+    const noteLine = note ? `<p style="margin:10px 0 0; font-size:13px; color:#6b7280;">${note}</p>` : '';
+
+    return `
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+        </head>
+        <body style="margin:0; padding:0; background:#f9fafb; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb; padding:32px 0;">
+            <tr>
+              <td align="center">
+                <table width="640" cellpadding="0" cellspacing="0" style="background:#ffffff; border:1px solid #e5e7eb;">
+                  <tr>
+                    <td style="padding:32px 40px; border-bottom:2px solid #111827;">
+                      <table width="100%" cellpadding="0" cellspacing="0">
+                        <tr>
+                          <td style="vertical-align:middle;">
+                            ${logoUrl ? `<img src="${logoUrl}" alt="${storeName}" style="height:36px; object-fit:contain;" />` : `<div style="font-size:20px; font-weight:700; color:#111827;">${storeName}</div>`}
+                          </td>
+                          <td style="text-align:right; vertical-align:middle;">
+                            <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#6b7280;">Order Update</div>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:32px 40px;">
+                      <h2 style="margin:0 0 8px; font-size:22px; font-weight:700; color:#111827;">Your order status has been updated</h2>
+                      <p style="margin:0 0 18px; font-size:14px; color:#6b7280;">Hi ${customerName}, we have an update for your order.</p>
+                      <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb; border:1px solid #e5e7eb;">
+                        <tr>
+                          <td style="padding:16px 20px;">
+                            <table width="100%" cellpadding="0" cellspacing="0">
+                              <tr>
+                                <td style="width:50%; vertical-align:top;">
+                                  <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#6b7280; margin-bottom:4px;">Order Number</div>
+                                  <div style="font-size:18px; font-weight:700; color:#111827;">#${orderNumber}</div>
+                                </td>
+                                <td style="width:50%; vertical-align:top; text-align:right;">
+                                  <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#6b7280; margin-bottom:4px;">New Status</div>
+                                  <div style="font-size:14px; font-weight:600; color:#111827;">${safeStatus}</div>
+                                </td>
+                              </tr>
+                            </table>
+                          </td>
+                        </tr>
+                      </table>
+                      ${noteLine}
+                      ${supportEmail ? `<p style="margin:20px 0 0; font-size:13px; color:#6b7280;">Support: ${supportEmail}</p>` : ''}
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </body>
+      </html>
+    `;
+  }
+
   static async sendOrderConfirmation({ order, items, payment, includeInvoicePdf = false }) {
     const settings = await EmailService.getSmtpSettings();
     const transport = EmailService.buildTransport(settings);
@@ -585,6 +655,29 @@ class EmailService {
 
     await transport.sendMail(mail);
 
+    return { sent: true };
+  }
+
+  static async sendOrderStatusUpdate({ order, status, note }) {
+    const settings = await EmailService.getSmtpSettings();
+    const transport = EmailService.buildTransport(settings);
+    if (!transport) return { skipped: true, reason: 'SMTP not configured' };
+
+    const fromName = settings?.store_name || 'Store';
+    const fromEmail = settings?.smtp_email;
+    const toEmail = order?.customer_email;
+    if (!toEmail) return { skipped: true, reason: 'Missing customer email' };
+
+    const html = EmailService.buildOrderStatusUpdateEmail({ order, status, note, settings });
+    const subjectStatus = String(status || order?.status || 'Updated').trim();
+    const mail = {
+      from: `${fromName} <${fromEmail}>`,
+      to: toEmail,
+      subject: `Order status update ${subjectStatus}`,
+      html
+    };
+
+    await transport.sendMail(mail);
     return { sent: true };
   }
 
