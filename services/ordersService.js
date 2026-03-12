@@ -459,6 +459,51 @@ class OrdersService {
       return updated;
     }
 
+  static async deleteCodOrder(id) {
+    const adminClient = createAdminClient();
+
+    const { data: order, error: orderError } = await adminClient
+      .from('orders')
+      .select('id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (orderError) {
+      throw new Error(`Database error: ${orderError.message}`);
+    }
+    if (!order) throw new Error('Order not found');
+
+    const { data: payments, error: payError } = await adminClient
+      .from('payments')
+      .select('method')
+      .eq('order_id', id);
+
+    if (payError) {
+      throw new Error(`Database error: ${payError.message}`);
+    }
+
+    const method = String(payments?.[0]?.method || '').toLowerCase();
+    const isCod = method === 'cod' || method.includes('cash');
+    if (!isCod) {
+      throw new Error('Only COD orders can be deleted');
+    }
+
+    await adminClient.from('order_items').delete().eq('order_id', id);
+    await adminClient.from('order_status_history').delete().eq('order_id', id);
+    await adminClient.from('payments').delete().eq('order_id', id);
+
+    const { error: deleteError } = await adminClient
+      .from('orders')
+      .delete()
+      .eq('id', id);
+
+    if (deleteError) {
+      throw new Error(`Database error: ${deleteError.message}`);
+    }
+
+    return { id };
+  }
+
   static async adjustStock(items, mode = 'reserve') {
     const adminClient = createAdminClient();
     const isRelease = mode === 'release';

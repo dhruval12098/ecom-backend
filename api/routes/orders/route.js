@@ -153,4 +153,32 @@ router.post('/:id/status', async (req, res) => {
   }
 });
 
+// DELETE /api/orders/:id (COD only)
+router.delete('/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid ID format',
+        message: 'ID must be a number'
+      });
+    }
+    const result = await OrdersService.deleteCodOrder(id);
+    res.json({
+      success: true,
+      data: result,
+      message: 'Order deleted successfully'
+    });
+  } catch (error) {
+    const msg = error.message || 'Failed to delete order';
+    const status = msg.includes('not found') ? 404 : msg.includes('COD') ? 400 : 500;
+    res.status(status).json({
+      success: false,
+      error: msg,
+      message: msg
+    });
+  }
+});
+
 module.exports = router;

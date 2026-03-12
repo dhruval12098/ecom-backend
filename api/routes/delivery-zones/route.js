@@ -71,10 +71,11 @@ router.put('/:id', async (req, res) => {
 router.post('/validate', async (req, res) => {
   try {
     const { country, city, postal_code } = req.body || {};
-    const allowed = await DeliveryZonesService.isAddressAllowed({ country, city, postal_code });
+    const zone = await DeliveryZonesService.findMatchingZone({ country, city, postal_code });
+    const allowed = zone ? true : await DeliveryZonesService.isAddressAllowed({ country, city, postal_code });
     res.json({
       success: true,
-      data: { allowed }
+      data: { allowed, zone: zone || null }
     });
   } catch (error) {
     res.status(400).json({

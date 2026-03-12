@@ -5,6 +5,9 @@ create table if not exists delivery_zones (
   city text null,
   postal_code text null,
   phase_label text null,
+  conditional numeric null,
+  min_order_amount numeric null,
+  delivery_fee numeric null,
   active boolean not null default true,
   created_at timestamptz not null default now()
 );
