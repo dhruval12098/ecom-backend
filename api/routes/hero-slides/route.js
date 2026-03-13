@@ -2,14 +2,43 @@ const express = require('express');
 const { HeroService } = require('../../../services/heroService');
 const router = express.Router();
 
+const buildHeroSlidesVersion = (slides) => {
+  if (!Array.isArray(slides) || slides.length === 0) {
+    return 'empty';
+  }
+  const timestamps = slides
+    .map((slide) => slide.updated_at || slide.created_at || null)
+    .filter(Boolean)
+    .map((value) => {
+      const time = new Date(value).getTime();
+      return Number.isFinite(time) ? time : null;
+    })
+    .filter((value) => value !== null);
+
+  if (timestamps.length) {
+    return new Date(Math.max(...timestamps)).toISOString();
+  }
+
+  const signature = slides
+    .map((slide) => `${slide.id || ''}:${slide.image_url || ''}:${slide.mobile_image_url || ''}`)
+    .join('|');
+  let hash = 0;
+  for (let i = 0; i < signature.length; i += 1) {
+    hash = (hash * 31 + signature.charCodeAt(i)) | 0;
+  }
+  return `h:${hash}`;
+};
+
 // GET /api/hero-slides - Get all hero slides
 router.get('/', async (req, res) => {
   try {
     const slides = await HeroService.getAllSlides();
+    const version = buildHeroSlidesVersion(slides);
     
     res.json({
       success: true,
       data: slides,
+      meta: { version },
       message: 'Hero slides fetched successfully'
     });
   } catch (error) {
@@ -17,6 +46,25 @@ router.get('/', async (req, res) => {
       success: false,
       error: error.message || 'Internal server error',
       message: 'Failed to fetch hero slides'
+    });
+  }
+});
+
+// GET /api/hero-slides/meta - Get hero slides version
+router.get('/meta', async (req, res) => {
+  try {
+    const slides = await HeroService.getAllSlides();
+    const version = buildHeroSlidesVersion(slides);
+    res.json({
+      success: true,
+      data: { version },
+      message: 'Hero slides version fetched successfully'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Internal server error',
+      message: 'Failed to fetch hero slides version'
     });
   }
 });

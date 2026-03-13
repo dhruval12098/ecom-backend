@@ -4,6 +4,26 @@ const { CategoriesService } = require('../../../services/categoriesService');
 const { CatalogService } = require('../../../services/catalogService');
 const router = express.Router();
 
+const buildCategoriesVersion = (categories) => {
+  if (!Array.isArray(categories) || categories.length === 0) {
+    return 'empty';
+  }
+  const signature = categories
+    .map((cat) => {
+      const subcats = Array.isArray(cat.subcategories) ? cat.subcategories : [];
+      const subSignature = subcats
+        .map((sub) => `${sub.id || ''}:${sub.slug || ''}:${sub.image || ''}`)
+        .join(',');
+      return `${cat.id || ''}:${cat.slug || ''}:${cat.image || ''}:${subSignature}`;
+    })
+    .join('|');
+  let hash = 0;
+  for (let i = 0; i < signature.length; i += 1) {
+    hash = (hash * 31 + signature.charCodeAt(i)) | 0;
+  }
+  return `h:${hash}`;
+};
+
 const storage = multer.memoryStorage();
 const upload = multer({
   storage: storage,
@@ -23,9 +43,11 @@ router.get('/', async (req, res) => {
     const includeInactive = String(req.query.includeInactive || '').toLowerCase() === 'true';
     const includeEmpty = String(req.query.includeEmpty || '').toLowerCase() === 'true';
     const data = await CatalogService.getCatalog({ includeInactive, includeEmpty });
+    const version = buildCategoriesVersion(data);
     res.json({
       success: true,
       data,
+      meta: { version },
       message: 'Categories fetched successfully'
     });
   } catch (error) {
@@ -33,6 +55,27 @@ router.get('/', async (req, res) => {
       success: false,
       error: error.message || 'Internal server error',
       message: 'Failed to fetch categories'
+    });
+  }
+});
+
+// GET /api/categories/meta - get catalog version
+router.get('/meta', async (req, res) => {
+  try {
+    const includeInactive = String(req.query.includeInactive || '').toLowerCase() === 'true';
+    const includeEmpty = String(req.query.includeEmpty || '').toLowerCase() === 'true';
+    const data = await CatalogService.getCatalog({ includeInactive, includeEmpty });
+    const version = buildCategoriesVersion(data);
+    res.json({
+      success: true,
+      data: { version },
+      message: 'Categories version fetched successfully'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Internal server error',
+      message: 'Failed to fetch categories version'
     });
   }
 });

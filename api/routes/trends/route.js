@@ -2,13 +2,42 @@ const express = require('express');
 const { TrendsService } = require('../../../services/trendsService');
 const router = express.Router();
 
+const buildTrendsVersion = (trends) => {
+  if (!Array.isArray(trends) || trends.length === 0) {
+    return 'empty';
+  }
+  const timestamps = trends
+    .map((trend) => trend.updated_at || trend.created_at || null)
+    .filter(Boolean)
+    .map((value) => {
+      const time = new Date(value).getTime();
+      return Number.isFinite(time) ? time : null;
+    })
+    .filter((value) => value !== null);
+
+  if (timestamps.length) {
+    return new Date(Math.max(...timestamps)).toISOString();
+  }
+
+  const signature = trends
+    .map((trend) => `${trend.id || ''}:${trend.title || ''}:${trend.image_url || ''}`)
+    .join('|');
+  let hash = 0;
+  for (let i = 0; i < signature.length; i += 1) {
+    hash = (hash * 31 + signature.charCodeAt(i)) | 0;
+  }
+  return `h:${hash}`;
+};
+
 // GET /api/trends
 router.get('/', async (req, res) => {
   try {
     const trends = await TrendsService.getAllTrends();
+    const version = buildTrendsVersion(trends);
     res.json({
       success: true,
       data: trends,
+      meta: { version },
       message: 'Trends fetched successfully'
     });
   } catch (error) {
@@ -16,6 +45,25 @@ router.get('/', async (req, res) => {
       success: false,
       error: error.message || 'Internal server error',
       message: 'Failed to fetch trends'
+    });
+  }
+});
+
+// GET /api/trends/meta
+router.get('/meta', async (req, res) => {
+  try {
+    const trends = await TrendsService.getAllTrends();
+    const version = buildTrendsVersion(trends);
+    res.json({
+      success: true,
+      data: { version },
+      message: 'Trends version fetched successfully'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Internal server error',
+      message: 'Failed to fetch trends version'
     });
   }
 });
