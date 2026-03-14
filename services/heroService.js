@@ -57,7 +57,8 @@ class HeroService {
       .from('hero_slides')
       .insert({
         image_url: slideData.imageUrl,
-        mobile_image_url: slideData.mobileImageUrl || null
+        mobile_image_url: slideData.mobileImageUrl || null,
+        button_link: slideData.buttonLink || slideData.linkUrl || null
       })
       .select()
       .single();
@@ -82,7 +83,8 @@ class HeroService {
       .from('hero_slides')
       .update({
         image_url: updateData.imageUrl,
-        mobile_image_url: updateData.mobileImageUrl || null
+        mobile_image_url: updateData.mobileImageUrl || null,
+        button_link: updateData.buttonLink || updateData.linkUrl || null
       })
       .eq('id', id)
       .select()
