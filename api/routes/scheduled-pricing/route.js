@@ -6,6 +6,11 @@ const router = express.Router();
 router.get('/active', async (req, res) => {
   try {
     const productId = parseInt(req.query.productId, 10);
+    const variantIdRaw = req.query.variantId;
+    const variantId =
+      variantIdRaw !== undefined && variantIdRaw !== null && variantIdRaw !== ''
+        ? parseInt(variantIdRaw, 10)
+        : null;
     if (isNaN(productId)) {
       return res.status(400).json({
         success: false,
@@ -13,9 +18,16 @@ router.get('/active', async (req, res) => {
         message: 'productId must be a number'
       });
     }
+    if (variantIdRaw !== undefined && variantIdRaw !== null && variantIdRaw !== '' && isNaN(variantId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid variantId',
+        message: 'variantId must be a number'
+      });
+    }
 
     const now = new Date().toISOString();
-    const data = await ScheduledPricingService.getActiveScheduleForProduct(productId, now);
+    const data = await ScheduledPricingService.getActiveScheduleForProduct(productId, now, variantId);
     res.json({
       success: true,
       data,

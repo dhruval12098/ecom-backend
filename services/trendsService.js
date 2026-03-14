@@ -37,6 +37,7 @@ class TrendsService {
         title: trendData.title,
         description: trendData.description || null,
         image_url: trendData.imageUrl || null,
+        link_url: trendData.linkUrl || null,
         sort_order: trendData.sortOrder || 0
       })
       .select()
@@ -62,6 +63,7 @@ class TrendsService {
         title: trendData.title,
         description: trendData.description || null,
         image_url: trendData.imageUrl || null,
+        link_url: trendData.linkUrl || null,
         sort_order: trendData.sortOrder || 0,
         updated_at: new Date().toISOString()
       })

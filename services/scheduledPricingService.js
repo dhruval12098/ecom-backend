@@ -1,15 +1,21 @@
 const { createAdminClient } = require('../supabase/config/supabaseClient');
 
 class ScheduledPricingService {
-  static async getActiveScheduleForProduct(productId, nowIso) {
+  static async getActiveScheduleForProduct(productId, nowIso, variantId = null) {
     const adminClient = createAdminClient();
-    const { data, error } = await adminClient
+    let query = adminClient
       .from('scheduled_pricing')
       .select('*')
       .eq('product_id', productId)
       .eq('status', 'active')
       .lte('start_at', nowIso)
-      .gte('end_at', nowIso)
+      .gte('end_at', nowIso);
+
+    if (variantId !== null && variantId !== undefined) {
+      query = query.eq('variant_id', variantId);
+    }
+
+    const { data, error } = await query
       .order('start_at', { ascending: false })
       .limit(1);
 
@@ -63,6 +69,7 @@ class ScheduledPricingService {
       .from('scheduled_pricing')
       .insert({
         product_id: payload.productId,
+        variant_id: payload.variantId || null,
         normal_price: payload.normalPrice,
         scheduled_price: payload.scheduledPrice,
         discount_percent: payload.discountPercent || null,
@@ -92,6 +99,7 @@ class ScheduledPricingService {
       .from('scheduled_pricing')
       .update({
         product_id: payload.productId,
+        variant_id: payload.variantId || null,
         normal_price: payload.normalPrice,
         scheduled_price: payload.scheduledPrice,
         discount_percent: payload.discountPercent || null,
