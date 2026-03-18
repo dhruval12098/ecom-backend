@@ -30,6 +30,9 @@ class ProductVariantsService {
         name: variant.name,
         type: variant.type || null,
         price: variant.price,
+        original_price: variant.originalPrice || null,
+        discount_percentage: variant.discountPercentage || null,
+        discount_color: variant.discountColor || null,
         stock_quantity: variant.stockQuantity || 0,
         sku: variant.sku || null,
         sort_order: variant.sortOrder || 0
@@ -56,6 +59,9 @@ class ProductVariantsService {
         name: variant.name,
         type: variant.type || null,
         price: variant.price,
+        original_price: variant.originalPrice || null,
+        discount_percentage: variant.discountPercentage || null,
+        discount_color: variant.discountColor || null,
         stock_quantity: variant.stockQuantity || 0,
         sku: variant.sku || null,
         sort_order: variant.sortOrder || 0

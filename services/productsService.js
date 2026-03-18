@@ -12,7 +12,43 @@ class ProductsService {
       throw new Error(`Database error: ${error.message}`);
     }
 
-    return data || [];
+    const products = data || [];
+    if (products.length === 0) return [];
+
+    const productIds = products.map((product) => product.id);
+    const { data: variants, error: variantsError } = await adminClient
+      .from('product_variants')
+      .select('*')
+      .in('product_id', productIds)
+      .order('sort_order', { ascending: true })
+      .order('id', { ascending: true });
+
+    if (variantsError) {
+      throw new Error(`Database error: ${variantsError.message}`);
+    }
+
+    const variantsByProduct = new Map();
+    (variants || []).forEach((variant) => {
+      const list = variantsByProduct.get(variant.product_id) || [];
+      list.push({
+        id: variant.id,
+        name: variant.name,
+        type: variant.type,
+        price: variant.price,
+        originalPrice: variant.original_price,
+        discountPercentage: variant.discount_percentage,
+        discountColor: variant.discount_color,
+        stockQuantity: variant.stock_quantity,
+        sku: variant.sku,
+        sortOrder: variant.sort_order
+      });
+      variantsByProduct.set(variant.product_id, list);
+    });
+
+    return products.map((product) => ({
+      ...product,
+      variants: variantsByProduct.get(product.id) || []
+    }));
   }
 
   static async getProductById(id) {
@@ -145,6 +181,7 @@ class ProductsService {
         sku: productData.sku || null,
         tax_percent: productData.taxPercent || null,
         shipping_method: productData.shippingMethod || null,
+        main_variant_id: productData.mainVariantId || null,
         status: productData.status || 'active',
         weight: productData.weight || null,
         origin: productData.origin || null
@@ -184,6 +221,7 @@ class ProductsService {
         sku: productData.sku || null,
         tax_percent: productData.taxPercent || null,
         shipping_method: productData.shippingMethod || null,
+        main_variant_id: productData.mainVariantId || null,
         status: productData.status || 'active',
         weight: productData.weight || null,
         origin: productData.origin || null,

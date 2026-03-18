@@ -50,6 +50,45 @@ class ProductImagesService {
     return data;
   }
 
+  static async replaceImages(productId, imageUrls = []) {
+    const adminClient = createAdminClient();
+    const normalized = Array.isArray(imageUrls)
+      ? imageUrls.map((url) => String(url || '').trim()).filter(Boolean)
+      : [];
+
+    const { error: deleteError } = await adminClient
+      .from('product_images')
+      .delete()
+      .eq('product_id', productId);
+
+    if (deleteError) {
+      throw new Error(`Database error: ${deleteError.message}`);
+    }
+
+    if (normalized.length === 0) {
+      return [];
+    }
+
+    const rows = normalized.map((url, index) => ({
+      product_id: productId,
+      image_url: url,
+      sort_order: index
+    }));
+
+    const { data, error } = await adminClient
+      .from('product_images')
+      .insert(rows)
+      .select('*')
+      .order('sort_order', { ascending: true })
+      .order('id', { ascending: true });
+
+    if (error) {
+      throw new Error(`Database error: ${error.message}`);
+    }
+
+    return data || [];
+  }
+
   static async deleteImage(id) {
     const adminClient = createAdminClient();
     const { error } = await adminClient

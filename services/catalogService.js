@@ -32,6 +32,9 @@ class CatalogService {
         name: v.name,
         type: v.type,
         price: v.price,
+        originalPrice: v.original_price,
+        discountPercentage: v.discount_percentage,
+        discountColor: v.discount_color,
         stockQuantity: v.stock_quantity,
         sku: v.sku
       }));
@@ -52,6 +55,7 @@ class CatalogService {
         sku: product.sku,
         taxPercent: product.tax_percent,
         shippingMethod: product.shipping_method,
+        mainVariantId: product.main_variant_id,
         status: product.status,
         weight: product.weight,
         origin: product.origin,

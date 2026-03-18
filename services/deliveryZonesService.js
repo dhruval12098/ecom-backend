@@ -4,6 +4,27 @@ function normalize(value) {
   return String(value || '').trim().toLowerCase();
 }
 
+function zoneMatchesAddress(zone, { country, city, postal_code }, { requirePostalMatch = false } = {}) {
+  const targetCountry = normalize(country);
+  const targetCity = normalize(city);
+  const targetPostal = normalize(postal_code);
+  const zoneCountry = normalize(zone.country);
+  const zonePostal = normalize(zone.postal_code);
+  const zoneCity = normalize(zone.city);
+
+  if (zoneCountry && targetCountry && zoneCountry !== targetCountry) {
+    return false;
+  }
+
+  if (requirePostalMatch) {
+    return Boolean(zonePostal && targetPostal && zonePostal === targetPostal);
+  }
+
+  if (zonePostal && targetPostal && zonePostal === targetPostal) return true;
+  if (zoneCity && targetCity && zoneCity === targetCity) return true;
+  return false;
+}
+
 class DeliveryZonesService {
   static async listZones({ activeOnly = false, country } = {}) {
     const adminClient = createAdminClient();
@@ -107,25 +128,19 @@ class DeliveryZonesService {
   static async isAddressAllowed({ country, city, postal_code }) {
     const zones = await DeliveryZonesService.listActiveZonesByCountry(country);
     if (zones.length === 0) {
-      // If no zones configured, do not block orders.
-      return true;
+      // Allow open delivery only when there are no active zones configured at all.
+      // If zones exist for other countries, this country should be treated as unavailable.
+      const allActiveZones = await DeliveryZonesService.listActiveZonesByCountry();
+      return allActiveZones.length === 0;
     }
 
-    const targetCountry = normalize(country);
-    const targetCity = normalize(city);
     const targetPostal = normalize(postal_code);
+    const hasPostalConfigured = zones.some((zone) => normalize(zone.postal_code));
+    const requirePostalMatch = Boolean(targetPostal && hasPostalConfigured);
 
-    return zones.some((zone) => {
-      const zoneCountry = normalize(zone.country);
-      if (zoneCountry && targetCountry && zoneCountry !== targetCountry) {
-        return false;
-      }
-      const zonePostal = normalize(zone.postal_code);
-      const zoneCity = normalize(zone.city);
-      if (zonePostal && targetPostal && zonePostal === targetPostal) return true;
-      if (zoneCity && targetCity && zoneCity === targetCity) return true;
-      return false;
-    });
+    return zones.some((zone) =>
+      zoneMatchesAddress(zone, { country, city, postal_code }, { requirePostalMatch })
+    );
   }
 
   static async findMatchingZone({ country, city, postal_code }) {
@@ -134,22 +149,14 @@ class DeliveryZonesService {
       return null;
     }
 
-    const targetCountry = normalize(country);
-    const targetCity = normalize(city);
     const targetPostal = normalize(postal_code);
+    const hasPostalConfigured = zones.some((zone) => normalize(zone.postal_code));
+    const requirePostalMatch = Boolean(targetPostal && hasPostalConfigured);
 
     return (
-      zones.find((zone) => {
-        const zoneCountry = normalize(zone.country);
-        if (zoneCountry && targetCountry && zoneCountry !== targetCountry) {
-          return false;
-        }
-        const zonePostal = normalize(zone.postal_code);
-        const zoneCity = normalize(zone.city);
-        if (zonePostal && targetPostal && zonePostal === targetPostal) return true;
-        if (zoneCity && targetCity && zoneCity === targetCity) return true;
-        return false;
-      }) || null
+      zones.find((zone) =>
+        zoneMatchesAddress(zone, { country, city, postal_code }, { requirePostalMatch })
+      ) || null
     );
   }
 

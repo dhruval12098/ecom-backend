@@ -1,4 +1,5 @@
 const { createAdminClient } = require('../supabase/config/supabaseClient');
+const { slugify } = require('../utils/slugify');
 
 class SubcategoriesService {
   static async getAllSubcategories() {
@@ -17,9 +18,11 @@ class SubcategoriesService {
   }
 
   static async createSubcategory(subcategoryData) {
-    if (!subcategoryData.categoryId || !subcategoryData.name || !subcategoryData.slug) {
-      throw new Error('Category, name, and slug are required');
+    if (!subcategoryData.categoryId || !subcategoryData.name) {
+      throw new Error('Category and name are required');
     }
+    const slug = slugify(subcategoryData.slug || subcategoryData.name);
+    if (!slug) throw new Error('Invalid slug');
 
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
@@ -27,7 +30,7 @@ class SubcategoriesService {
       .insert({
         category_id: subcategoryData.categoryId,
         name: subcategoryData.name,
-        slug: subcategoryData.slug,
+        slug,
         image_url: subcategoryData.imageUrl || null,
         sort_order: subcategoryData.sortOrder || 0
       })
@@ -42,9 +45,11 @@ class SubcategoriesService {
   }
 
   static async updateSubcategory(id, subcategoryData) {
-    if (!subcategoryData.categoryId || !subcategoryData.name || !subcategoryData.slug) {
-      throw new Error('Category, name, and slug are required');
+    if (!subcategoryData.categoryId || !subcategoryData.name) {
+      throw new Error('Category and name are required');
     }
+    const slug = slugify(subcategoryData.slug || subcategoryData.name);
+    if (!slug) throw new Error('Invalid slug');
 
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
@@ -52,7 +57,7 @@ class SubcategoriesService {
       .update({
         category_id: subcategoryData.categoryId,
         name: subcategoryData.name,
-        slug: subcategoryData.slug,
+        slug,
         image_url: subcategoryData.imageUrl || null,
         sort_order: subcategoryData.sortOrder || 0,
         updated_at: new Date().toISOString()

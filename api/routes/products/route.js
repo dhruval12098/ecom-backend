@@ -68,6 +68,9 @@ router.get('/slug/:slug', async (req, res) => {
           name: v.name,
           type: v.type,
           price: v.price,
+          originalPrice: v.original_price,
+          discountPercentage: v.discount_percentage,
+          discountColor: v.discount_color,
           stockQuantity: v.stock_quantity,
           sku: v.sku,
           sortOrder: v.sort_order
@@ -115,6 +118,9 @@ router.get('/:id', async (req, res) => {
           name: v.name,
           type: v.type,
           price: v.price,
+          originalPrice: v.original_price,
+          discountPercentage: v.discount_percentage,
+          discountColor: v.discount_color,
           stockQuantity: v.stock_quantity,
           sku: v.sku,
           sortOrder: v.sort_order
@@ -298,6 +304,33 @@ router.post('/:id/images', async (req, res) => {
       success: false,
       error: error.message || 'Internal server error',
       message: 'Failed to add product image'
+    });
+  }
+});
+
+// PUT /api/products/:id/images
+router.put('/:id/images', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid ID format',
+        message: 'ID must be a number'
+      });
+    }
+    const images = Array.isArray(req.body?.images) ? req.body.images : [];
+    const saved = await ProductImagesService.replaceImages(id, images);
+    res.json({
+      success: true,
+      data: saved,
+      message: 'Product gallery updated successfully'
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      error: error.message || 'Internal server error',
+      message: 'Failed to update product gallery'
     });
   }
 });

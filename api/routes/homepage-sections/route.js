@@ -36,7 +36,8 @@ router.post('/', async (req, res) => {
     const body = req.body || {};
     const section = body.section || body.section_key || body.sectionKey;
     const productId = body.productId || body.product_id;
-    const data = await HomepageSectionsService.addProduct(section, productId);
+    const variantId = body.variantId ?? body.variant_id ?? null;
+    const data = await HomepageSectionsService.addProduct(section, productId, variantId);
     res.status(201).json({
       success: true,
       data,

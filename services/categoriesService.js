@@ -1,4 +1,5 @@
 const { createAdminClient } = require('../supabase/config/supabaseClient');
+const { slugify } = require('../utils/slugify');
 
 const normalizeStatus = (value) => String(value || '').toLowerCase().trim();
 const isValidStatus = (value) => value === 'active' || value === 'inactive';
@@ -20,9 +21,11 @@ class CategoriesService {
   }
 
   static async createCategory(categoryData) {
-    if (!categoryData.name || !categoryData.slug) {
-      throw new Error('Name and slug are required');
+    if (!categoryData.name) {
+      throw new Error('Name is required');
     }
+    const slug = slugify(categoryData.slug || categoryData.name);
+    if (!slug) throw new Error('Invalid slug');
     const status = normalizeStatus(categoryData.status || 'active');
     if (!isValidStatus(status)) {
       throw new Error('Invalid status value');
@@ -33,7 +36,7 @@ class CategoriesService {
       .from('categories')
       .insert({
         name: categoryData.name,
-        slug: categoryData.slug,
+        slug,
         description: categoryData.description || null,
         image_url: categoryData.imageUrl || null,
         sort_order: categoryData.sortOrder || 0,
@@ -50,13 +53,15 @@ class CategoriesService {
   }
 
   static async updateCategory(id, categoryData) {
-    if (!categoryData.name || !categoryData.slug) {
-      throw new Error('Name and slug are required');
+    if (!categoryData.name) {
+      throw new Error('Name is required');
     }
+    const slug = slugify(categoryData.slug || categoryData.name);
+    if (!slug) throw new Error('Invalid slug');
 
     const payload = {
       name: categoryData.name,
-      slug: categoryData.slug,
+      slug,
       updated_at: new Date().toISOString()
     };
 

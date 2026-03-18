@@ -21,6 +21,7 @@ class HomepageSectionsService {
     const rows = data || [];
 
     const productIds = rows.map((row) => row.product_id).filter(Boolean);
+    const variantIds = rows.map((row) => row.variant_id).filter(Boolean);
 
     if (productIds.length === 0) {
       return rows.map((row) => ({ ...row, product: null }));
@@ -36,25 +37,47 @@ class HomepageSectionsService {
     }
 
     const productMap = new Map((products || []).map((product) => [product.id, product]));
+    let variantMap = new Map();
+
+    if (variantIds.length > 0) {
+      const { data: variants, error: variantError } = await adminClient
+        .from('product_variants')
+        .select('*')
+        .in('id', variantIds);
+
+      if (variantError) {
+        throw new Error(`Database error: ${variantError.message}`);
+      }
+
+      variantMap = new Map((variants || []).map((variant) => [variant.id, variant]));
+    }
 
     return rows.map((row) => ({
       ...row,
-      product: productMap.get(row.product_id) || null
+      product: productMap.get(row.product_id) || null,
+      variant: row.variant_id ? variantMap.get(row.variant_id) || null : null
     }));
   }
 
-  static async addProduct(section, productId) {
+  static async addProduct(section, productId, variantId = null) {
     if (!section || !productId) {
       throw new Error('Section and productId are required');
     }
 
     const adminClient = createAdminClient();
-    const { data: existing, error: existingError } = await adminClient
+    let existingQuery = adminClient
       .from('homepage_sections')
       .select('*')
       .eq('section_key', section)
-      .eq('product_id', productId)
-      .maybeSingle();
+      .eq('product_id', productId);
+
+    if (variantId === null || variantId === undefined || variantId === '') {
+      existingQuery = existingQuery.is('variant_id', null);
+    } else {
+      existingQuery = existingQuery.eq('variant_id', Number(variantId));
+    }
+
+    const { data: existing, error: existingError } = await existingQuery.maybeSingle();
 
     if (existingError) {
       throw new Error(`Database error: ${existingError.message}`);
@@ -68,7 +91,8 @@ class HomepageSectionsService {
       .from('homepage_sections')
       .insert({
         section_key: section,
-        product_id: productId
+        product_id: productId,
+        variant_id: variantId === null || variantId === undefined || variantId === '' ? null : Number(variantId)
       })
       .select()
       .single();
