@@ -51,6 +51,7 @@ class SettingsService {
         ? payload.delivery_time_blocks
         : existing?.delivery_time_blocks,
       logo_url: hasOwn('logo_url') ? payload.logo_url : existing?.logo_url,
+      vat_number: hasOwn('vat_number') ? payload.vat_number : existing?.vat_number,
       excluded_free_shipping_category_ids: hasOwn('excluded_free_shipping_category_ids')
         ? payload.excluded_free_shipping_category_ids
         : existing?.excluded_free_shipping_category_ids

@@ -178,6 +178,7 @@ function createInvoiceDocument({ React, renderer, order, items, payment, setting
   const currency = settings?.currency_code || 'USD';
   const storeAddress = settings?.address || '';
   const storePhone = settings?.phone || '';
+  const storeVat = settings?.vat_number || '';
   const invoiceNumber = order?.order_code || order?.order_number || order?.id || '';
   const invoiceDate = formatDate(order?.created_at) || formatDate(new Date());
   const paymentStatus = payment?.status || order?.payment_status || 'Pending';
@@ -219,7 +220,8 @@ function createInvoiceDocument({ React, renderer, order, items, payment, setting
             storeName && logoUrl ? React.createElement(Text, { style: reactPdfStyles.storeName }, storeName) : null,
             storeAddress ? React.createElement(Text, { style: reactPdfStyles.muted }, storeAddress) : null,
             storePhone ? React.createElement(Text, { style: reactPdfStyles.muted }, storePhone) : null,
-            supportEmail ? React.createElement(Text, { style: reactPdfStyles.muted }, supportEmail) : null
+            supportEmail ? React.createElement(Text, { style: reactPdfStyles.muted }, supportEmail) : null,
+            storeVat ? React.createElement(Text, { style: reactPdfStyles.muted }, `VAT: ${storeVat}`) : null
           ),
           React.createElement(
             View,

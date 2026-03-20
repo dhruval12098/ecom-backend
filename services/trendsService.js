@@ -25,6 +25,25 @@ class TrendsService {
     return rows;
   }
 
+  static async getTrendById(id) {
+    const adminClient = createAdminClient();
+    const { data, error } = await adminClient
+      .from('trends')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      throw new Error(`Database error: ${error.message}`);
+    }
+
+    if (!data) {
+      throw new Error('Trend not found');
+    }
+
+    return data;
+  }
+
   static async createTrend(trendData) {
     if (!trendData.title) {
       throw new Error('Title is required');

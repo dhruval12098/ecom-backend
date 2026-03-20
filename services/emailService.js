@@ -6,7 +6,7 @@ class EmailService {
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
       .from('store_settings')
-      .select('smtp_email, smtp_password, smtp_host, smtp_port, smtp_secure, store_name, support_email, logo_url, phone, address, store_email, currency_code')
+      .select('smtp_email, smtp_password, smtp_host, smtp_port, smtp_secure, store_name, support_email, logo_url, phone, address, store_email, currency_code, vat_number')
       .eq('id', 1)
       .single();
 
@@ -54,6 +54,7 @@ class EmailService {
     const currency = settings?.currency_code || 'USD';
     const storeAddress = settings?.address || '';
     const storePhone = settings?.phone || '';
+    const storeVat = settings?.vat_number || '';
     const invoiceNumber = order?.order_code || order?.order_number || order?.id || '';
     const invoiceDate = EmailService.formatDate(order?.created_at) || EmailService.formatDate(new Date());
     const paymentStatus = payment?.status || order?.payment_status || 'Pending';
@@ -103,6 +104,7 @@ class EmailService {
                       <div style="margin-top:8px; font-size:13px; color:#6b7280;">${storeAddress || ''}</div>
                       ${storePhone ? `<div style="font-size:13px; color:#6b7280;">${storePhone}</div>` : ''}
                       ${supportEmail ? `<div style="font-size:13px; color:#6b7280;">${supportEmail}</div>` : ''}
+                      ${storeVat ? `<div style="font-size:13px; color:#6b7280;">VAT: ${storeVat}</div>` : ''}
                     </td>
                     <td style="text-align:right; vertical-align:middle; width:40%;">
                       <div style="font-size:14px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#6b7280; margin-bottom:4px;">Invoice</div>

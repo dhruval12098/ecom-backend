@@ -68,6 +68,39 @@ router.get('/meta', async (req, res) => {
   }
 });
 
+// GET /api/trends/:id
+router.get('/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid ID format',
+        message: 'ID must be a number'
+      });
+    }
+    const trend = await TrendsService.getTrendById(id);
+    res.json({
+      success: true,
+      data: trend,
+      message: 'Trend fetched successfully'
+    });
+  } catch (error) {
+    if (error.message === 'Trend not found') {
+      return res.status(404).json({
+        success: false,
+        error: 'Not found',
+        message: 'Trend not found'
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Internal server error',
+      message: 'Failed to fetch trend'
+    });
+  }
+});
+
 // POST /api/trends
 router.post('/', async (req, res) => {
   try {

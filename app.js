@@ -38,6 +38,7 @@ app.use('/api/coupons', require('./api/routes/coupons/route'));
 app.use('/api/storage', require('./api/routes/storage/route'));
 app.use('/api/orders', require('./api/routes/orders/route'));
 app.use('/api/guest-orders', require('./api/routes/guest-orders/route'));
+app.use('/api/reports', require('./api/routes/reports/route'));
 app.use('/api/customers', require('./api/routes/customers/route'));
 app.use('/api/payments', require('./api/routes/payments/route'));
 app.use('/api/shipping-rates', require('./api/routes/shipping-rates/route'));
