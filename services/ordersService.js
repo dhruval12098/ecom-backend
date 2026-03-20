@@ -298,52 +298,58 @@ class OrdersService {
     const { data: byId, error: byIdError } = await adminClient
       .from('orders')
       .select('*')
-      .eq('id', id);
+      .eq('id', id)
+      .single();
 
     if (byIdError) {
-      throw new Error(`Database error: ${byIdError.message}`);
+      if (byIdError.code !== 'PGRST116') {
+        throw new Error(`Database error: ${byIdError.message}`);
+      }
     }
 
-    order = (byId || [])[0] || null;
+    order = byId || null;
 
     if (!order) {
       const { data: byNumber, error: byNumberError } = await adminClient
         .from('orders')
         .select('*')
-        .eq('order_number', id);
+        .eq('order_number', id)
+        .single();
 
       if (byNumberError) {
-        throw new Error(`Database error: ${byNumberError.message}`);
+        if (byNumberError.code !== 'PGRST116') {
+          throw new Error(`Database error: ${byNumberError.message}`);
+        }
       }
 
-      order = (byNumber || [])[0] || null;
+      order = byNumber || null;
     }
 
     if (!order) throw new Error('Order not found');
 
-    const { data: items } = await adminClient
-      .from('order_items')
-      .select('*')
-      .eq('order_id', order.id)
-      .order('id', { ascending: true });
-
-    const { data: payments } = await adminClient
-      .from('payments')
-      .select('*')
-      .eq('order_id', order.id)
-      .order('id', { ascending: true });
-
-    const { data: statusHistory } = await adminClient
-      .from('order_status_history')
-      .select('*')
-      .eq('order_id', order.id)
-      .order('changed_at', { ascending: true });
+    const [itemsResult, paymentsResult, statusHistoryResult] = await Promise.all([
+      adminClient
+        .from('order_items')
+        .select('*')
+        .eq('order_id', order.id)
+        .order('id', { ascending: true }),
+      adminClient
+        .from('payments')
+        .select('*')
+        .eq('order_id', order.id)
+        .order('id', { ascending: true }),
+      adminClient
+        .from('order_status_history')
+        .select('*')
+        .eq('order_id', order.id)
+        .order('changed_at', { ascending: true })
+    ]);
 
     return {
       ...order,
-      items: items || [],
-      payments: payments || [],
-      status_history: statusHistory || []
+      items: itemsResult?.data || [],
+      payments: paymentsResult?.data || [],
+      status_history: statusHistoryResult?.data || []
     };
   }
 
