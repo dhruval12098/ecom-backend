@@ -49,6 +49,7 @@ class CustomersService {
     const email = payload.email || null;
     const phone = payload.phone || null;
     const fullName = payload.full_name || payload.name || null;
+    const lastAuthMethod = payload.last_auth_method || null;
 
     if (!authUserId && !email && !phone) {
       throw new Error('auth_user_id, email, or phone is required');
@@ -90,7 +91,8 @@ class CustomersService {
           auth_user_id: authUserId || existing.auth_user_id,
           full_name: fullName || existing.full_name,
           email: email || existing.email,
-          phone: phone || existing.phone
+          phone: phone || existing.phone,
+          last_auth_method: lastAuthMethod || existing.last_auth_method || null
         })
         .eq('id', existing.id)
         .select()
@@ -108,7 +110,8 @@ class CustomersService {
         auth_user_id: authUserId,
         full_name: fullName,
         email,
-        phone
+        phone,
+        last_auth_method: lastAuthMethod
       })
       .select()
       .single();
