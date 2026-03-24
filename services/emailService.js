@@ -781,27 +781,30 @@ class EmailService {
     `;
   }
 
-  static async sendGuestOrdersOtp({ email, code }) {
-    const settings = await EmailService.getSmtpSettings();
-    const transport = EmailService.buildTransport(settings);
-    if (!transport) return { skipped: true, reason: 'SMTP not configured' };
+    static async sendGuestOrdersOtp({ email, code }) {
+      const settings = await EmailService.getSmtpSettings();
+      const transport = EmailService.buildTransport(settings);
+      if (!transport) return { skipped: true, reason: 'SMTP not configured' };
 
-    const fromName = settings?.store_name || 'Store';
-    const fromEmail = settings?.smtp_email;
-    const toEmail = email;
-    if (!toEmail) return { skipped: true, reason: 'Missing email' };
+      const fromName = settings?.store_name || 'Store';
+      const fromEmail = settings?.smtp_email || settings?.support_email || settings?.store_email;
+      const toEmail = email;
+      if (!toEmail) return { skipped: true, reason: 'Missing email' };
+      if (!fromEmail) return { skipped: true, reason: 'Sender email not configured' };
 
-    const html = EmailService.buildGuestOrdersOtpEmail({ code, settings });
-    const mail = {
-      from: `${fromName} <${fromEmail}>`,
-      to: toEmail,
-      subject: 'Your verification code',
-      html
-    };
+      const html = EmailService.buildGuestOrdersOtpEmail({ code, settings });
+      const replyTo = settings?.support_email || settings?.smtp_email || undefined;
+      const mail = {
+        from: `${fromName} <${fromEmail}>`,
+        to: toEmail,
+        subject: 'Your verification code',
+        html,
+        ...(replyTo ? { replyTo } : {})
+      };
 
-    await transport.sendMail(mail);
-    return { sent: true };
-  }
+      await transport.sendMail(mail);
+      return { sent: true };
+    }
 }
 
 module.exports = { EmailService };
