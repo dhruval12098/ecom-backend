@@ -53,6 +53,7 @@ app.use('/api/announcement-bar', require('./api/routes/announcement-bar/route'))
 app.use('/api/admin-auth', require('./api/routes/admin-auth/route'));
 app.use('/api/worldline', require('./api/routes/worldline/route'));
 app.use('/api/shippo', require('./api/routes/shippo/route'));
+app.use('/api/docs', require('./api/routes/docs/route'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
