@@ -35,6 +35,11 @@ async function updatePaymentAndOrder({ orderId, paymentId, status, amount, metho
     .select('transaction_id, status')
     .eq('order_id', orderId)
     .single();
+  const { data: existingOrder } = await adminClient
+    .from('orders')
+    .select('status')
+    .eq('id', orderId)
+    .maybeSingle();
 
   const methodValue = method ? `WORLDLINE_${String(method).toUpperCase()}` : 'WORLDLINE';
   const updates = {
@@ -52,16 +57,24 @@ async function updatePaymentAndOrder({ orderId, paymentId, status, amount, metho
 
   await adminClient.from('payments').update(updates).eq('order_id', orderId);
 
+  const currentOrderStatus = String(existingOrder?.status || '').toLowerCase();
+
   if (status === 'paid') {
-    await OrdersService.updateOrderStatus(orderId, 'confirmed', 'Worldline payment confirmed');
+    if (!['confirmed', 'cancelled', 'refunded'].includes(currentOrderStatus)) {
+      await OrdersService.updateOrderStatus(orderId, 'confirmed', 'Worldline payment confirmed');
+    }
   }
   if (status === 'failed') {
-    await OrdersService.updateOrderStatus(orderId, 'cancelled', 'Worldline payment failed');
+    if (!['confirmed', 'cancelled', 'refunded'].includes(currentOrderStatus)) {
+      await OrdersService.updateOrderStatus(orderId, 'cancelled', 'Worldline payment failed/cancelled');
+    }
   }
   if (status === 'refunded') {
-    await OrdersService.updateOrderStatus(orderId, 'cancelled', 'Worldline refund processed');
+    if (!['cancelled', 'refunded'].includes(currentOrderStatus)) {
+      await OrdersService.updateOrderStatus(orderId, 'cancelled', 'Worldline refund processed');
+    }
   }
-  return { previousStatus: existingPayment?.status || null, status };
+  return { previousStatus: existingPayment?.status || null, status, orderStatus: currentOrderStatus };
 }
 
 function buildPaymentIdCandidates(raw) {
@@ -324,6 +337,19 @@ router.get('/checkout-status', async (req, res) => {
       details
     });
 
+    if (updateResult?.status === 'failed' && updateResult?.previousStatus !== 'failed') {
+      if (!['confirmed', 'cancelled', 'refunded'].includes(updateResult?.orderStatus || '')) {
+        setImmediate(async () => {
+          try {
+            const fullOrder = await OrdersService.getOrderById(orderId);
+            await EmailService.sendPaymentFailed({ order: fullOrder });
+          } catch (err) {
+            console.error('Failed to send payment failed email:', err?.message || err);
+          }
+        });
+      }
+    }
+
     if (updateResult?.status === 'refunded' && updateResult?.previousStatus !== 'refunded') {
       setImmediate(async () => {
         try {
@@ -336,7 +362,12 @@ router.get('/checkout-status', async (req, res) => {
       });
     }
 
-    res.json({ success: true, data: hostedCheckout || paymentData || null });
+    res.json({
+      success: true,
+      status,
+      paymentId,
+      data: hostedCheckout || paymentData || null
+    });
   } catch (error) {
     const status = error?.status || undefined;
     const body = error?.body || undefined;
@@ -508,6 +539,19 @@ router.post('/webhook', async (req, res) => {
         hostedCheckoutId,
         details
       });
+
+      if (updateResult?.status === 'failed' && updateResult?.previousStatus !== 'failed') {
+        if (!['confirmed', 'cancelled', 'refunded'].includes(updateResult?.orderStatus || '')) {
+          setImmediate(async () => {
+            try {
+              const fullOrder = await OrdersService.getOrderById(orderId);
+              await EmailService.sendPaymentFailed({ order: fullOrder });
+            } catch (err) {
+              console.error('Failed to send payment failed email:', err?.message || err);
+            }
+          });
+        }
+      }
 
       if (updateResult?.status === 'refunded' && updateResult?.previousStatus !== 'refunded') {
         setImmediate(async () => {

@@ -256,6 +256,23 @@ class OrdersService {
     const orders = data || [];
     if (orders.length === 0) return orders;
 
+    const now = Date.now();
+    const expiryMs = 24 * 60 * 60 * 1000;
+    for (const order of orders) {
+      const status = String(order.status || '').toLowerCase();
+      if (status !== 'pending') continue;
+      const createdAt = order.created_at ? new Date(order.created_at).getTime() : NaN;
+      if (!Number.isFinite(createdAt)) continue;
+      if (now - createdAt >= expiryMs) {
+        try {
+          await OrdersService.updateOrderStatus(order.id, 'cancelled', 'Pending payment expired');
+          order.status = 'cancelled';
+        } catch (e) {
+          // keep list response even if auto-cancel fails
+        }
+      }
+    }
+
     const orderIds = orders.map((o) => o.id);
     const { data: items } = await adminClient
       .from('order_items')
@@ -291,7 +308,7 @@ class OrdersService {
     }));
   }
 
-  static async getOrderById(id) {
+  static async getOrderById(id, options = {}) {
     const adminClient = createAdminClient();
     let order = null;
 
@@ -326,6 +343,17 @@ class OrdersService {
     }
 
     if (!order) throw new Error('Order not found');
+
+    const skipExpiryCheck = Boolean(options.skipExpiryCheck);
+    if (!skipExpiryCheck) {
+      const status = String(order.status || '').toLowerCase();
+      const createdAt = order.created_at ? new Date(order.created_at).getTime() : NaN;
+      const expiryMs = 24 * 60 * 60 * 1000;
+      if (status === 'pending' && Number.isFinite(createdAt) && Date.now() - createdAt >= expiryMs) {
+        await OrdersService.updateOrderStatus(order.id, 'cancelled', 'Pending payment expired');
+        return OrdersService.getOrderById(order.id, { skipExpiryCheck: true });
+      }
+    }
 
     const [itemsResult, paymentsResult, statusHistoryResult] = await Promise.all([
       adminClient
@@ -422,7 +450,7 @@ class OrdersService {
       if (shouldReserve && !wasReserved) {
         setImmediate(async () => {
           try {
-            const fullOrder = await OrdersService.getOrderById(id);
+            const fullOrder = await OrdersService.getOrderById(id, { skipExpiryCheck: true });
             const payment = (fullOrder?.payments || [])[0] || null;
             await EmailService.sendOrderConfirmation({
               order: fullOrder,
@@ -439,7 +467,7 @@ class OrdersService {
       if (normalized === 'cancelled' && previous !== 'cancelled') {
         setImmediate(async () => {
           try {
-            const fullOrder = await OrdersService.getOrderById(id);
+            const fullOrder = await OrdersService.getOrderById(id, { skipExpiryCheck: true });
             await EmailService.sendOrderCancellation({ order: fullOrder });
           } catch (error) {
             console.error('Failed to send order cancellation email:', error?.message || error);
@@ -450,7 +478,7 @@ class OrdersService {
       if (normalized !== previous) {
         setImmediate(async () => {
           try {
-            const fullOrder = await OrdersService.getOrderById(id);
+            const fullOrder = await OrdersService.getOrderById(id, { skipExpiryCheck: true });
             await EmailService.sendOrderStatusUpdate({
               order: fullOrder,
               status,

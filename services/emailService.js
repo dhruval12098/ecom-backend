@@ -6,14 +6,27 @@ class EmailService {
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
       .from('store_settings')
-      .select('smtp_email, smtp_password, smtp_host, smtp_port, smtp_secure, store_name, support_email, logo_url, phone, address, store_email, currency_code, vat_number')
+      .select('store_name, support_email, logo_url, phone, address, store_email, currency_code, vat_number')
       .eq('id', 1)
       .single();
 
     if (error) {
       throw new Error(`Database error: ${error.message}`);
     }
-    return data || null;
+    const env = process.env;
+    const toBool = (value) => {
+      if (value === undefined || value === null) return false;
+      const normalized = String(value).trim().toLowerCase();
+      return normalized === 'true' || normalized === '1' || normalized === 'yes';
+    };
+    return {
+      ...(data || {}),
+      smtp_email: env.SMTP_USER || env.SMTP_EMAIL || '',
+      smtp_password: env.SMTP_PASS || env.SMTP_PASSWORD || '',
+      smtp_host: env.SMTP_HOST || '',
+      smtp_port: env.SMTP_PORT || '',
+      smtp_secure: toBool(env.SMTP_SECURE)
+    };
   }
 
   static buildTransport(settings) {
@@ -484,6 +497,75 @@ class EmailService {
     `;
   }
 
+  static buildPaymentFailedEmail({ order, settings }) {
+    const storeName = settings?.store_name || 'Your Store';
+    const supportEmail = settings?.support_email || settings?.smtp_email || '';
+    const logoUrl = settings?.logo_url || '';
+    const orderNumber = order?.order_code || order?.order_number || order?.id || '';
+    const customerName = order?.customer_name || 'Customer';
+
+    return `
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+        </head>
+        <body style="margin:0; padding:0; background:#f9fafb; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb; padding:32px 0;">
+            <tr>
+              <td align="center">
+                <table width="640" cellpadding="0" cellspacing="0" style="background:#ffffff; border:1px solid #e5e7eb;">
+                  <tr>
+                    <td style="padding:32px 40px; border-bottom:2px solid #111827;">
+                      <table width="100%" cellpadding="0" cellspacing="0">
+                        <tr>
+                          <td style="vertical-align:middle;">
+                            ${logoUrl ? `<img src="${logoUrl}" alt="${storeName}" style="height:36px; object-fit:contain;" />` : `<div style="font-size:20px; font-weight:700; color:#111827;">${storeName}</div>`}
+                          </td>
+                          <td style="text-align:right; vertical-align:middle;">
+                            <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:#6b7280;">Payment Not Completed</div>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:32px 40px;">
+                      <h2 style="margin:0 0 8px; font-size:24px; font-weight:700; color:#111827;">Your payment was not completed</h2>
+                      <p style="margin:0 0 20px; font-size:14px; color:#6b7280;">Hi ${customerName}, your order is saved, but the payment attempt did not complete. You can retry the payment or choose another method.</p>
+
+                      <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb; border:1px solid #e5e7eb;">
+                        <tr>
+                          <td style="padding:16px 20px;">
+                            <table width="100%" cellpadding="0" cellspacing="0">
+                              <tr>
+                                <td style="width:50%; vertical-align:top;">
+                                  <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#6b7280; margin-bottom:4px;">Order Number</div>
+                                  <div style="font-size:18px; font-weight:700; color:#111827;">#${orderNumber}</div>
+                                </td>
+                                <td style="width:50%; vertical-align:top; text-align:right;">
+                                  <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#6b7280; margin-bottom:4px;">Status</div>
+                                  <div style="font-size:14px; font-weight:600; color:#111827;">Payment Not Completed</div>
+                                </td>
+                              </tr>
+                            </table>
+                          </td>
+                        </tr>
+                      </table>
+
+                      ${supportEmail ? `<p style="margin:20px 0 0; font-size:13px; color:#6b7280;">Support: ${supportEmail}</p>` : ''}
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </body>
+      </html>
+    `;
+  }
+
   static buildOrderRefundEmail({ order, payment, settings }) {
     const storeName = settings?.store_name || 'Your Store';
     const supportEmail = settings?.support_email || settings?.smtp_email || '';
@@ -698,6 +780,28 @@ class EmailService {
       from: `${fromName} <${fromEmail}>`,
       to: toEmail,
       subject: `Order cancelled ${order.order_code || order.order_number}`,
+      html
+    };
+
+    await transport.sendMail(mail);
+    return { sent: true };
+  }
+
+  static async sendPaymentFailed({ order }) {
+    const settings = await EmailService.getSmtpSettings();
+    const transport = EmailService.buildTransport(settings);
+    if (!transport) return { skipped: true, reason: 'SMTP not configured' };
+
+    const fromName = settings?.store_name || 'Store';
+    const fromEmail = settings?.smtp_email;
+    const toEmail = order?.customer_email;
+    if (!toEmail) return { skipped: true, reason: 'Missing customer email' };
+
+    const html = EmailService.buildPaymentFailedEmail({ order, settings });
+    const mail = {
+      from: `${fromName} <${fromEmail}>`,
+      to: toEmail,
+      subject: `Payment not completed ${order.order_code || order.order_number}`,
       html
     };
 

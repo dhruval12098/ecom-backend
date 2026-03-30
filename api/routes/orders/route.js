@@ -153,6 +153,46 @@ router.post('/:id/status', async (req, res) => {
   }
 });
 
+// POST /api/orders/:id/send-email
+router.post('/:id/send-email', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid ID format',
+        message: 'ID must be a number'
+      });
+    }
+    const { includeInvoicePdf } = req.body || {};
+    const orderData = await OrdersService.getOrderById(id);
+    const payment = (orderData?.payments || [])[0] || null;
+    const result = await EmailService.sendOrderConfirmation({
+      order: orderData,
+      items: orderData?.items || [],
+      payment,
+      includeInvoicePdf: Boolean(includeInvoicePdf)
+    });
+    if (result?.skipped) {
+      return res.status(400).json({
+        success: false,
+        error: result.reason || 'Email not sent',
+        message: 'Email not sent'
+      });
+    }
+    res.json({
+      success: true,
+      message: 'Order confirmation email sent'
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      error: error.message || 'Internal server error',
+      message: 'Failed to send email'
+    });
+  }
+});
+
 // DELETE /api/orders/:id (COD only)
 router.delete('/:id', async (req, res) => {
   try {
