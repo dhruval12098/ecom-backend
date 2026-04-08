@@ -5,13 +5,33 @@ const router = express.Router();
 // GET /api/scheduled-pricing/active?productId=123
 router.get('/active', async (req, res) => {
   try {
+    const productType = String(req.query.productType || 'normal').toLowerCase();
     const productId = parseInt(req.query.productId, 10);
+    const specialProductIdRaw = req.query.specialProductId;
+    const specialProductId =
+      specialProductIdRaw !== undefined && specialProductIdRaw !== null && specialProductIdRaw !== ''
+        ? parseInt(specialProductIdRaw, 10)
+        : null;
     const variantIdRaw = req.query.variantId;
     const variantId =
       variantIdRaw !== undefined && variantIdRaw !== null && variantIdRaw !== ''
         ? parseInt(variantIdRaw, 10)
         : null;
-    if (isNaN(productId)) {
+    if (productType === 'special' && specialProductIdRaw !== undefined && specialProductIdRaw !== null && specialProductIdRaw !== '' && isNaN(specialProductId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid specialProductId',
+        message: 'specialProductId must be a number'
+      });
+    }
+    if (productType === 'special' && (specialProductId === null || specialProductId === undefined) && isNaN(productId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid specialProductId',
+        message: 'specialProductId must be a number'
+      });
+    }
+    if (productType !== 'special' && isNaN(productId)) {
       return res.status(400).json({
         success: false,
         error: 'Invalid productId',
@@ -27,7 +47,12 @@ router.get('/active', async (req, res) => {
     }
 
     const now = new Date().toISOString();
-    const data = await ScheduledPricingService.getActiveScheduleForProduct(productId, now, variantId);
+    const data = await ScheduledPricingService.getActiveScheduleForProduct(
+      productType === 'special' ? (specialProductId ?? productId) : productId,
+      now,
+      variantId,
+      { productType, specialProductId }
+    );
     res.json({
       success: true,
       data,

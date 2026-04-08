@@ -1,18 +1,25 @@
 const { createAdminClient } = require('../supabase/config/supabaseClient');
 
 class ScheduledPricingService {
-  static async getActiveScheduleForProduct(productId, nowIso, variantId = null) {
+  static async getActiveScheduleForProduct(productId, nowIso, variantId = null, options = {}) {
+    const productType = String(options.productType || 'normal').toLowerCase();
+    const specialProductId = options.specialProductId ?? null;
     const adminClient = createAdminClient();
     let query = adminClient
       .from('scheduled_pricing')
       .select('*')
-      .eq('product_id', productId)
       .eq('status', 'active')
       .lte('start_at', nowIso)
       .gte('end_at', nowIso);
 
-    if (variantId !== null && variantId !== undefined) {
-      query = query.eq('variant_id', variantId);
+    if (productType === 'special') {
+      const targetId = specialProductId ?? productId;
+      query = query.eq('special_product_id', targetId).eq('product_type', 'special');
+    } else {
+      query = query.eq('product_id', productId).or('product_type.is.null,product_type.eq.normal');
+      if (variantId !== null && variantId !== undefined) {
+        query = query.eq('variant_id', variantId);
+      }
     }
 
     const { data, error } = await query
@@ -60,7 +67,10 @@ class ScheduledPricingService {
   }
 
   static async createSchedule(payload) {
-    if (!payload.productId || !payload.normalPrice || !payload.scheduledPrice || !payload.startAt || !payload.endAt) {
+    const productType = String(payload.productType || 'normal').toLowerCase();
+    const isSpecial = productType === 'special';
+    const targetProductId = isSpecial ? payload.specialProductId : payload.productId;
+    if (!targetProductId || !payload.normalPrice || !payload.scheduledPrice || !payload.startAt || !payload.endAt) {
       throw new Error('Product, normal price, scheduled price, start, and end are required');
     }
 
@@ -68,8 +78,10 @@ class ScheduledPricingService {
     const { data, error } = await adminClient
       .from('scheduled_pricing')
       .insert({
-        product_id: payload.productId,
-        variant_id: payload.variantId || null,
+        product_id: isSpecial ? null : payload.productId,
+        special_product_id: isSpecial ? payload.specialProductId : null,
+        product_type: isSpecial ? 'special' : 'normal',
+        variant_id: isSpecial ? null : payload.variantId || null,
         normal_price: payload.normalPrice,
         scheduled_price: payload.scheduledPrice,
         discount_percent: payload.discountPercent || null,
@@ -90,7 +102,10 @@ class ScheduledPricingService {
   }
 
   static async updateSchedule(id, payload) {
-    if (!payload.productId || !payload.normalPrice || !payload.scheduledPrice || !payload.startAt || !payload.endAt) {
+    const productType = String(payload.productType || 'normal').toLowerCase();
+    const isSpecial = productType === 'special';
+    const targetProductId = isSpecial ? payload.specialProductId : payload.productId;
+    if (!targetProductId || !payload.normalPrice || !payload.scheduledPrice || !payload.startAt || !payload.endAt) {
       throw new Error('Product, normal price, scheduled price, start, and end are required');
     }
 
@@ -98,8 +113,10 @@ class ScheduledPricingService {
     const { data, error } = await adminClient
       .from('scheduled_pricing')
       .update({
-        product_id: payload.productId,
-        variant_id: payload.variantId || null,
+        product_id: isSpecial ? null : payload.productId,
+        special_product_id: isSpecial ? payload.specialProductId : null,
+        product_type: isSpecial ? 'special' : 'normal',
+        variant_id: isSpecial ? null : payload.variantId || null,
         normal_price: payload.normalPrice,
         scheduled_price: payload.scheduledPrice,
         discount_percent: payload.discountPercent || null,

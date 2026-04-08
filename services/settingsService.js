@@ -49,7 +49,10 @@ class SettingsService {
       vat_number: hasOwn('vat_number') ? payload.vat_number : existing?.vat_number,
       excluded_free_shipping_category_ids: hasOwn('excluded_free_shipping_category_ids')
         ? payload.excluded_free_shipping_category_ids
-        : existing?.excluded_free_shipping_category_ids
+        : existing?.excluded_free_shipping_category_ids,
+      excluded_free_shipping_special_category_ids: hasOwn('excluded_free_shipping_special_category_ids')
+        ? payload.excluded_free_shipping_special_category_ids
+        : existing?.excluded_free_shipping_special_category_ids
     };
 
     const { data, error } = await adminClient
