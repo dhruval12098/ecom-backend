@@ -49,6 +49,16 @@ class OrdersService {
       .single();
 
     if (createError) {
+      const isDuplicate =
+        createError.code === '23505' ||
+        String(createError.message || '').toLowerCase().includes('duplicate');
+      if (isDuplicate) {
+        const { data: retry, error: retryError } = await query.maybeSingle();
+        if (retryError && retryError.code !== 'PGRST116') {
+          throw new Error(`Database error: ${retryError.message}`);
+        }
+        if (retry) return retry;
+      }
       throw new Error(`Database error: ${createError.message}`);
     }
 
