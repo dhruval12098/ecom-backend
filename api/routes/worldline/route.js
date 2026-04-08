@@ -362,6 +362,9 @@ router.get('/checkout-status', async (req, res) => {
       });
     }
 
+    // Avoid stale status during payment return/polling.
+    res.setHeader('Cache-Control', 'no-store, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
     res.json({
       success: true,
       status,
