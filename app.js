@@ -50,6 +50,7 @@ app.use('/api/delivery-zones', require('./api/routes/delivery-zones/route'));
 app.use('/api/customer-addresses', require('./api/routes/customer-addresses/route'));
 app.use('/api/product-reviews', require('./api/routes/product-reviews/route'));
 app.use('/api/homepage-sections', require('./api/routes/homepage-sections/route'));
+app.use('/api/homepage-section-defs', require('./api/routes/homepage-section-defs/route'));
 app.use('/api/faqs', require('./api/routes/faqs/route'));
 app.use('/api/support', require('./api/routes/support/route'));
 app.use('/api/settings', require('./api/routes/settings/route'));

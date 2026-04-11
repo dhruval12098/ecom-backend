@@ -1,6 +1,21 @@
 const express = require('express');
 const { SpecialCategoriesService } = require('../../../services/specialCategoriesService');
+const multer = require('multer');
 const router = express.Router();
+
+// Configure multer for file uploads
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
 
 // GET /api/special-categories
 router.get('/', async (req, res) => {
@@ -16,6 +31,37 @@ router.get('/', async (req, res) => {
       success: false,
       error: error.message || 'Internal server error',
       message: 'Failed to fetch special categories'
+    });
+  }
+});
+
+// POST /api/special-categories/upload - upload special category image
+router.post('/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No file uploaded',
+        message: 'Please select a file to upload'
+      });
+    }
+    const fileName = req.body.fileName || req.file.originalname;
+    const contentType = req.body.contentType || req.file.mimetype;
+    const uploadResult = await SpecialCategoriesService.uploadImage(
+      req.file.buffer,
+      fileName,
+      contentType
+    );
+    res.json({
+      success: true,
+      data: uploadResult,
+      message: 'Image uploaded successfully'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Internal server error',
+      message: 'Failed to upload image'
     });
   }
 });

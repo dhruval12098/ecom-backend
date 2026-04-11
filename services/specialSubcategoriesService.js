@@ -53,6 +53,7 @@ class SpecialSubcategoriesService {
         name: payload.name,
         slug,
         description: payload.description || null,
+        image_url: payload.imageUrl || null,
         status,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -79,6 +80,7 @@ class SpecialSubcategoriesService {
       name: payload.name,
       slug,
       description: payload.description || null,
+      image_url: payload.imageUrl || null,
       updated_at: new Date().toISOString()
     };
     if (payload.status !== undefined) {
@@ -118,6 +120,33 @@ class SpecialSubcategoriesService {
     if (error) {
       throw new Error(`Database error: ${error.message}`);
     }
+  }
+
+  static async uploadImage(fileBuffer, fileName, contentType) {
+    const adminClient = createAdminClient();
+    const timestamp = Date.now();
+    const uniqueFileName = `special-subcategories/${timestamp}-${fileName}`;
+
+    const { data, error } = await adminClient.storage
+      .from('ecommerce')
+      .upload(uniqueFileName, fileBuffer, {
+        contentType: contentType,
+        upsert: false
+      });
+
+    if (error) {
+      throw new Error(`Storage upload error: ${error.message}`);
+    }
+
+    const { data: { publicUrl } } = adminClient.storage
+      .from('ecommerce')
+      .getPublicUrl(uniqueFileName);
+
+    return {
+      path: data.path,
+      publicUrl,
+      fileName: uniqueFileName
+    };
   }
 }
 

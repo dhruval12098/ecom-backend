@@ -37,6 +37,7 @@ class SpecialCategoriesService {
         name: payload.name,
         slug,
         description: payload.description || null,
+        image_url: payload.imageUrl || null,
         pickup_only: payload.pickup_only ?? true,
         pickup_address: payload.pickup_address || null,
         status
@@ -65,6 +66,7 @@ class SpecialCategoriesService {
     };
 
     if (payload.description !== undefined) next.description = payload.description || null;
+    if (payload.imageUrl !== undefined) next.image_url = payload.imageUrl || null;
     if (payload.pickup_only !== undefined) next.pickup_only = Boolean(payload.pickup_only);
     if (payload.pickup_address !== undefined) next.pickup_address = payload.pickup_address || null;
     if (payload.status !== undefined) {
@@ -104,6 +106,33 @@ class SpecialCategoriesService {
     if (error) {
       throw new Error(`Database error: ${error.message}`);
     }
+  }
+
+  static async uploadImage(fileBuffer, fileName, contentType) {
+    const adminClient = createAdminClient();
+    const timestamp = Date.now();
+    const uniqueFileName = `special-categories/${timestamp}-${fileName}`;
+
+    const { data, error } = await adminClient.storage
+      .from('ecommerce')
+      .upload(uniqueFileName, fileBuffer, {
+        contentType: contentType,
+        upsert: false
+      });
+
+    if (error) {
+      throw new Error(`Storage upload error: ${error.message}`);
+    }
+
+    const { data: { publicUrl } } = adminClient.storage
+      .from('ecommerce')
+      .getPublicUrl(uniqueFileName);
+
+    return {
+      path: data.path,
+      publicUrl: publicUrl,
+      fileName: uniqueFileName
+    };
   }
 }
 

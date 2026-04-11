@@ -88,11 +88,33 @@ class OrdersService {
       throw new Error('Order items are required');
     }
 
-    await DeliveryZonesService.assertAddressAllowed({
-      country: payload.address_country,
-      city: payload.address_city,
-      postal_code: payload.address_postal_code
+    const itemTypes = payload.items.map((item) => {
+      const raw =
+        item?.product_type ??
+        item?.productType ??
+        (item?.is_special || item?.isSpecial ? 'special' : 'normal');
+      const value = String(raw || 'normal').toLowerCase().trim();
+      return value === 'special' ? 'special' : 'normal';
     });
+    const hasSpecial = itemTypes.includes('special');
+    const hasNormal = itemTypes.includes('normal');
+    if (hasSpecial && hasNormal) {
+      throw new Error('Meals are pickup-only and must be ordered separately (no mixed cart).');
+    }
+    const isPickupOnlyOrder = hasSpecial && !hasNormal;
+
+    if (!isPickupOnlyOrder) {
+      await DeliveryZonesService.assertAddressAllowed({
+        country: payload.address_country,
+        city: payload.address_city,
+        postal_code: payload.address_postal_code
+      });
+    } else {
+      const fee = Number(payload.shipping_fee || 0);
+      if (Number.isFinite(fee) && fee > 0) {
+        throw new Error('Pickup-only orders cannot include a shipping fee.');
+      }
+    }
 
     const adminClient = createAdminClient();
 

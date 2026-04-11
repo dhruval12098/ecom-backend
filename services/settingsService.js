@@ -34,6 +34,12 @@ class SettingsService {
       maintenance_enabled: hasOwn('maintenance_enabled') ? payload.maintenance_enabled : existing?.maintenance_enabled,
       maintenance_message: hasOwn('maintenance_message') ? payload.maintenance_message : existing?.maintenance_message,
       shipping_note: hasOwn('shipping_note') ? payload.shipping_note : existing?.shipping_note,
+      home_hero_text_enabled: hasOwn('home_hero_text_enabled')
+        ? payload.home_hero_text_enabled
+        : existing?.home_hero_text_enabled,
+      home_hero_h1_text: hasOwn('home_hero_h1_text')
+        ? payload.home_hero_h1_text
+        : existing?.home_hero_h1_text,
       delivery_schedule_enabled: hasOwn('delivery_schedule_enabled')
         ? payload.delivery_schedule_enabled
         : existing?.delivery_schedule_enabled,

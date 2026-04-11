@@ -19,6 +19,7 @@ class EmailService {
       const normalized = String(value).trim().toLowerCase();
       return normalized === 'true' || normalized === '1' || normalized === 'yes';
     };
+
     return {
       ...(data || {}),
       smtp_email: env.SMTP_USER || env.SMTP_EMAIL || '',
