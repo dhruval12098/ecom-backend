@@ -37,7 +37,7 @@ class SpecialCategoriesService {
         name: payload.name,
         slug,
         description: payload.description || null,
-        image_url: payload.imageUrl || null,
+        image_url: payload.image_url ?? payload.imageUrl ?? null,
         pickup_only: payload.pickup_only ?? true,
         pickup_address: payload.pickup_address || null,
         status
@@ -66,7 +66,9 @@ class SpecialCategoriesService {
     };
 
     if (payload.description !== undefined) next.description = payload.description || null;
-    if (payload.imageUrl !== undefined) next.image_url = payload.imageUrl || null;
+    if (payload.image_url !== undefined || payload.imageUrl !== undefined) {
+      next.image_url = payload.image_url ?? payload.imageUrl ?? null;
+    }
     if (payload.pickup_only !== undefined) next.pickup_only = Boolean(payload.pickup_only);
     if (payload.pickup_address !== undefined) next.pickup_address = payload.pickup_address || null;
     if (payload.status !== undefined) {
