@@ -120,7 +120,6 @@ class SpecialProductsService {
         pickup_time: payload.pickup_time || null,
         cutoff_time: payload.cutoff_time || null,
         bulk_order_limit: payload.bulk_order_limit ?? null,
-        available_days: payload.available_days || null,
         status,
         sort_order: payload.sort_order || 0
       })
@@ -161,7 +160,6 @@ class SpecialProductsService {
       pickup_time: payload.pickup_time || null,
       cutoff_time: payload.cutoff_time || null,
       bulk_order_limit: payload.bulk_order_limit ?? null,
-      available_days: payload.available_days || null,
       sort_order: payload.sort_order || 0,
       updated_at: new Date().toISOString()
     };
