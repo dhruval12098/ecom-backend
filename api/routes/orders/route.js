@@ -4,6 +4,117 @@ const { EmailService } = require('../../../services/emailService');
 
 const router = express.Router();
 
+async function processEmailQueue({ providedKey, limitValue }) {
+  const cronKey = process.env.EMAIL_QUEUE_CRON_KEY || '';
+  if (cronKey && String(providedKey || '') !== String(cronKey)) {
+    const err = new Error('Invalid cron key');
+    err.statusCode = 401;
+    throw err;
+  }
+
+  const limit = Math.min(50, Math.max(1, Number(limitValue || 10)));
+  const nowIso = new Date().toISOString();
+  const { createAdminClient } = require('../../../supabase/config/supabaseClient');
+  const adminClient = createAdminClient();
+
+  const { data: jobs, error: jobsError } = await adminClient
+    .from('email_jobs')
+    .select('*')
+    .in('status', ['pending', 'retry'])
+    .lte('next_attempt_at', nowIso)
+    .order('id', { ascending: true })
+    .limit(limit);
+
+  if (jobsError) {
+    throw new Error(`Queue read failed: ${jobsError.message}`);
+  }
+
+  const results = [];
+  for (const job of jobs || []) {
+    const jobId = job.id;
+    try {
+      await adminClient
+        .from('email_jobs')
+        .update({ status: 'processing', updated_at: new Date().toISOString() })
+        .eq('id', jobId);
+
+      const orderData = await OrdersService.getOrderById(job.order_id, { skipExpiryCheck: true });
+      const payment = (orderData?.payments || [])[0] || null;
+      let sendResult = { sent: false, reason: 'Unknown job type' };
+      const payload = job.payload || {};
+
+      if (job.job_type === 'order_confirmation') {
+        sendResult = await EmailService.sendOrderConfirmation({
+          order: orderData,
+          items: orderData?.items || [],
+          payment,
+          includeInvoicePdf: Boolean(payload.includeInvoicePdf)
+        });
+      } else if (job.job_type === 'order_cancellation') {
+        sendResult = await EmailService.sendOrderCancellation({ order: orderData });
+      } else if (job.job_type === 'status_update') {
+        sendResult = await EmailService.sendOrderStatusUpdate({
+          order: orderData,
+          status: payload.status || orderData?.status,
+          note: payload.note || ''
+        });
+      }
+
+      if (sendResult?.sent) {
+        await adminClient
+          .from('email_jobs')
+          .update({
+            status: 'sent',
+            last_error: null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', jobId);
+        results.push({ id: jobId, status: 'sent' });
+        continue;
+      }
+
+      const attempts = Number(job.attempts || 0) + 1;
+      const maxAttempts = 3;
+      const nextStatus = attempts >= maxAttempts ? 'failed' : 'retry';
+      const delayMinutes = attempts >= maxAttempts ? 0 : attempts * 2;
+      const nextAttemptAt = new Date(Date.now() + delayMinutes * 60 * 1000).toISOString();
+      await adminClient
+        .from('email_jobs')
+        .update({
+          status: nextStatus,
+          attempts,
+          last_error: sendResult?.reason || 'Email send skipped',
+          next_attempt_at: nextAttemptAt,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', jobId);
+      results.push({ id: jobId, status: nextStatus, reason: sendResult?.reason || 'Skipped' });
+    } catch (jobError) {
+      const attempts = Number(job.attempts || 0) + 1;
+      const maxAttempts = 3;
+      const nextStatus = attempts >= maxAttempts ? 'failed' : 'retry';
+      const delayMinutes = attempts >= maxAttempts ? 0 : attempts * 2;
+      const nextAttemptAt = new Date(Date.now() + delayMinutes * 60 * 1000).toISOString();
+      await adminClient
+        .from('email_jobs')
+        .update({
+          status: nextStatus,
+          attempts,
+          last_error: jobError?.message || String(jobError || 'Unknown queue error'),
+          next_attempt_at: nextAttemptAt,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', jobId);
+      results.push({ id: jobId, status: nextStatus, reason: jobError?.message || 'Queue error' });
+    }
+  }
+
+  return {
+    processed: results.length,
+    results
+  };
+}
+
 // GET /api/orders
 router.get('/', async (req, res) => {
   try {
@@ -159,125 +270,40 @@ router.post('/:id/status', async (req, res) => {
 // POST /api/orders/email-queue/process
 router.post('/email-queue/process', async (req, res) => {
   try {
-    const cronKey = process.env.EMAIL_QUEUE_CRON_KEY || '';
-    if (cronKey) {
-      const provided = req.headers['x-cron-key'] || req.query.key || '';
-      if (String(provided) !== String(cronKey)) {
-        return res.status(401).json({
-          success: false,
-          error: 'Unauthorized',
-          message: 'Invalid cron key'
-        });
-      }
-    }
-
-    const limit = Math.min(50, Math.max(1, Number(req.body?.limit || req.query?.limit || 10)));
-    const nowIso = new Date().toISOString();
-    const { createAdminClient } = require('../../../supabase/config/supabaseClient');
-    const adminClient = createAdminClient();
-
-    const { data: jobs, error: jobsError } = await adminClient
-      .from('email_jobs')
-      .select('*')
-      .in('status', ['pending', 'retry'])
-      .lte('next_attempt_at', nowIso)
-      .order('id', { ascending: true })
-      .limit(limit);
-
-    if (jobsError) {
-      throw new Error(`Queue read failed: ${jobsError.message}`);
-    }
-
-    const results = [];
-    for (const job of jobs || []) {
-      const jobId = job.id;
-      try {
-        await adminClient
-          .from('email_jobs')
-          .update({ status: 'processing', updated_at: new Date().toISOString() })
-          .eq('id', jobId);
-
-        const orderData = await OrdersService.getOrderById(job.order_id, { skipExpiryCheck: true });
-        const payment = (orderData?.payments || [])[0] || null;
-        let sendResult = { sent: false, reason: 'Unknown job type' };
-        const payload = job.payload || {};
-
-        if (job.job_type === 'order_confirmation') {
-          sendResult = await EmailService.sendOrderConfirmation({
-            order: orderData,
-            items: orderData?.items || [],
-            payment,
-            includeInvoicePdf: Boolean(payload.includeInvoicePdf)
-          });
-        } else if (job.job_type === 'order_cancellation') {
-          sendResult = await EmailService.sendOrderCancellation({ order: orderData });
-        } else if (job.job_type === 'status_update') {
-          sendResult = await EmailService.sendOrderStatusUpdate({
-            order: orderData,
-            status: payload.status || orderData?.status,
-            note: payload.note || ''
-          });
-        }
-
-        if (sendResult?.sent) {
-          await adminClient
-            .from('email_jobs')
-            .update({
-              status: 'sent',
-              last_error: null,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', jobId);
-          results.push({ id: jobId, status: 'sent' });
-          continue;
-        }
-
-        const attempts = Number(job.attempts || 0) + 1;
-        const maxAttempts = 3;
-        const nextStatus = attempts >= maxAttempts ? 'failed' : 'retry';
-        const delayMinutes = attempts >= maxAttempts ? 0 : attempts * 2;
-        const nextAttemptAt = new Date(Date.now() + delayMinutes * 60 * 1000).toISOString();
-        await adminClient
-          .from('email_jobs')
-          .update({
-            status: nextStatus,
-            attempts,
-            last_error: sendResult?.reason || 'Email send skipped',
-            next_attempt_at: nextAttemptAt,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', jobId);
-        results.push({ id: jobId, status: nextStatus, reason: sendResult?.reason || 'Skipped' });
-      } catch (jobError) {
-        const attempts = Number(job.attempts || 0) + 1;
-        const maxAttempts = 3;
-        const nextStatus = attempts >= maxAttempts ? 'failed' : 'retry';
-        const delayMinutes = attempts >= maxAttempts ? 0 : attempts * 2;
-        const nextAttemptAt = new Date(Date.now() + delayMinutes * 60 * 1000).toISOString();
-        await adminClient
-          .from('email_jobs')
-          .update({
-            status: nextStatus,
-            attempts,
-            last_error: jobError?.message || String(jobError || 'Unknown queue error'),
-            next_attempt_at: nextAttemptAt,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', jobId);
-        results.push({ id: jobId, status: nextStatus, reason: jobError?.message || 'Queue error' });
-      }
-    }
+    const data = await processEmailQueue({
+      providedKey: req.headers['x-cron-key'] || req.query.key || '',
+      limitValue: req.body?.limit || req.query?.limit
+    });
 
     res.json({
       success: true,
-      data: {
-        processed: results.length,
-        results
-      },
+      data,
       message: 'Email queue processed'
     });
   } catch (error) {
-    res.status(400).json({
+    res.status(error?.statusCode || 400).json({
+      success: false,
+      error: error.message || 'Internal server error',
+      message: 'Failed to process email queue'
+    });
+  }
+});
+
+// GET /api/orders/email-queue/process (for browser/manual ping + Vercel cron defaults)
+router.get('/email-queue/process', async (req, res) => {
+  try {
+    const data = await processEmailQueue({
+      providedKey: req.headers['x-cron-key'] || req.query.key || '',
+      limitValue: req.query?.limit
+    });
+
+    res.json({
+      success: true,
+      data,
+      message: 'Email queue processed'
+    });
+  } catch (error) {
+    res.status(error?.statusCode || 400).json({
       success: false,
       error: error.message || 'Internal server error',
       message: 'Failed to process email queue'
