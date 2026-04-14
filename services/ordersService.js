@@ -288,16 +288,30 @@ class OrdersService {
       payment = paymentData;
     }
 
-    await adminClient
-      .from('order_status_history')
-      .insert({
-        order_id: order.id,
-        status: order.status,
-        note: 'Order created'
-      });
+      await adminClient
+        .from('order_status_history')
+        .insert({
+          order_id: order.id,
+          status: order.status,
+          note: 'Order created'
+        });
 
-    return { order, items: items || [], payment };
-  }
+      const createdStatus = String(order.status || '').toLowerCase().trim();
+      if (createdStatus === 'pending') {
+        try {
+          await OrdersService.enqueueEmailJob({
+            orderId: order.id,
+            jobType: 'status_update',
+            payload: { status: 'Pending', note: 'Order has received, currently in pending status.' }
+          });
+        } catch (queueError) {
+          // Do not fail checkout if queue insert fails.
+          console.error(`[order:${order.id}] Failed to queue pending status email:`, queueError?.message || queueError);
+        }
+      }
+
+      return { order, items: items || [], payment };
+    }
 
   static async listOrders(filters = {}) {
     const adminClient = createAdminClient();

@@ -696,6 +696,10 @@ class EmailService {
     const orderNumber = order?.order_code || order?.order_number || order?.id || '';
     const customerName = order?.customer_name || 'Customer';
     const safeStatus = String(status || order?.status || '').trim() || 'Updated';
+    const isPendingStatus = safeStatus.toLowerCase() === 'pending';
+    const introLine = isPendingStatus
+      ? `Hi ${customerName}, your order has received, currently in pending status.`
+      : `Hi ${customerName}, we have an update for your order.`;
     const noteLine = note ? `<p style="margin:10px 0 0; font-size:13px; color:#6b7280;">${note}</p>` : '';
 
     return `
@@ -724,10 +728,10 @@ class EmailService {
                       </table>
                     </td>
                   </tr>
-                  <tr>
-                    <td style="padding:32px 40px;">
-                      <h2 style="margin:0 0 8px; font-size:22px; font-weight:700; color:#111827;">Your order status has been updated</h2>
-                      <p style="margin:0 0 18px; font-size:14px; color:#6b7280;">Hi ${customerName}, we have an update for your order.</p>
+                    <tr>
+                      <td style="padding:32px 40px;">
+                        <h2 style="margin:0 0 8px; font-size:22px; font-weight:700; color:#111827;">Your order status has been updated</h2>
+                        <p style="margin:0 0 18px; font-size:14px; color:#6b7280;">${introLine}</p>
                       <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb; border:1px solid #e5e7eb;">
                         <tr>
                           <td style="padding:16px 20px;">
