@@ -6,7 +6,7 @@ class EmailService {
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
       .from('store_settings')
-      .select('store_name, support_email, logo_url, phone, address, store_email, currency_code, vat_number')
+      .select('store_name, support_email, logo_url, phone, address, store_email, currency_code, vat_number, smtp_email, smtp_password, smtp_host, smtp_port, smtp_secure')
       .eq('id', 1)
       .single();
 
@@ -22,11 +22,13 @@ class EmailService {
 
     return {
       ...(data || {}),
-      smtp_email: env.SMTP_USER || env.SMTP_EMAIL || '',
-      smtp_password: env.SMTP_PASS || env.SMTP_PASSWORD || '',
-      smtp_host: env.SMTP_HOST || '',
-      smtp_port: env.SMTP_PORT || '',
-      smtp_secure: toBool(env.SMTP_SECURE)
+      smtp_email: data?.smtp_email || env.SMTP_USER || env.SMTP_EMAIL || '',
+      smtp_password: data?.smtp_password || env.SMTP_PASS || env.SMTP_PASSWORD || '',
+      smtp_host: data?.smtp_host || env.SMTP_HOST || '',
+      smtp_port: data?.smtp_port || env.SMTP_PORT || '',
+      smtp_secure: data?.smtp_secure !== undefined && data?.smtp_secure !== null
+        ? Boolean(data.smtp_secure)
+        : toBool(env.SMTP_SECURE)
     };
   }
 
@@ -44,6 +46,55 @@ class EmailService {
       secure: Boolean(settings.smtp_secure),
       auth: { user, pass }
     });
+  }
+
+  static async sendSmtpTest({
+    smtp_email,
+    smtp_password,
+    smtp_host,
+    smtp_port,
+    smtp_secure,
+    to_email
+  }) {
+    const settings = await EmailService.getSmtpSettings();
+    const testSettings = {
+      ...settings,
+      smtp_email: smtp_email || settings?.smtp_email || '',
+      smtp_password: smtp_password || settings?.smtp_password || '',
+      smtp_host: smtp_host || settings?.smtp_host || '',
+      smtp_port: smtp_port || settings?.smtp_port || '',
+      smtp_secure: smtp_secure !== undefined && smtp_secure !== null
+        ? Boolean(smtp_secure)
+        : Boolean(settings?.smtp_secure)
+    };
+    const transport = EmailService.buildTransport(testSettings);
+    if (!transport) {
+      return { skipped: true, reason: 'SMTP not configured' };
+    }
+
+    await transport.verify();
+
+    const fromName = testSettings?.store_name || 'Store';
+    const fromEmail = testSettings?.smtp_email;
+    const toEmail = to_email || testSettings?.support_email || fromEmail;
+    if (!toEmail) {
+      return { skipped: true, reason: 'Recipient email not configured' };
+    }
+
+    await transport.sendMail({
+      from: `${fromName} <${fromEmail}>`,
+      to: toEmail,
+      subject: 'SMTP test email',
+      html: `
+        <div style="font-family: Arial, sans-serif; color: #111827;">
+          <h2 style="margin:0 0 12px;">SMTP test successful</h2>
+          <p style="margin:0 0 8px;">Your store SMTP configuration is working.</p>
+          <p style="margin:0;">Sent at: ${new Date().toISOString()}</p>
+        </div>
+      `
+    });
+
+    return { sent: true, to: toEmail };
   }
 
   static formatCurrency(amount, currency = 'USD') {

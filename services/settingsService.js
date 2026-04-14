@@ -53,6 +53,11 @@ class SettingsService {
         : existing?.delivery_time_blocks,
       logo_url: hasOwn('logo_url') ? payload.logo_url : existing?.logo_url,
       vat_number: hasOwn('vat_number') ? payload.vat_number : existing?.vat_number,
+      smtp_email: hasOwn('smtp_email') ? payload.smtp_email : existing?.smtp_email,
+      smtp_password: hasOwn('smtp_password') ? payload.smtp_password : existing?.smtp_password,
+      smtp_host: hasOwn('smtp_host') ? payload.smtp_host : existing?.smtp_host,
+      smtp_port: hasOwn('smtp_port') ? payload.smtp_port : existing?.smtp_port,
+      smtp_secure: hasOwn('smtp_secure') ? payload.smtp_secure : existing?.smtp_secure,
       excluded_free_shipping_category_ids: hasOwn('excluded_free_shipping_category_ids')
         ? payload.excluded_free_shipping_category_ids
         : existing?.excluded_free_shipping_category_ids,
