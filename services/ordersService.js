@@ -66,24 +66,6 @@ class OrdersService {
   }
 
   static async createOrder(payload) {
-    const requiredFields = [
-      'customer_name',
-      'customer_email',
-      'customer_phone',
-      'address_street',
-      'address_city',
-      'address_postal_code',
-      'address_country',
-      'subtotal',
-      'total_amount'
-    ];
-
-    for (const field of requiredFields) {
-      if (payload[field] === undefined || payload[field] === null || payload[field] === '') {
-        throw new Error(`Missing required field: ${field}`);
-      }
-    }
-
     if (!Array.isArray(payload.items) || payload.items.length === 0) {
       throw new Error('Order items are required');
     }
@@ -102,6 +84,29 @@ class OrdersService {
       throw new Error('Meals are pickup-only and must be ordered separately (no mixed cart).');
     }
     const isPickupOnlyOrder = hasSpecial && !hasNormal;
+
+    const baseRequiredFields = [
+      'customer_name',
+      'customer_email',
+      'customer_phone',
+      'address_country',
+      'subtotal',
+      'total_amount'
+    ];
+    const deliveryRequiredFields = [
+      'address_street',
+      'address_city',
+      'address_postal_code'
+    ];
+    const requiredFields = isPickupOnlyOrder
+      ? baseRequiredFields
+      : [...baseRequiredFields, ...deliveryRequiredFields];
+
+    for (const field of requiredFields) {
+      if (payload[field] === undefined || payload[field] === null || payload[field] === '') {
+        throw new Error(`Missing required field: ${field}`);
+      }
+    }
 
     if (!isPickupOnlyOrder) {
       await DeliveryZonesService.assertAddressAllowed({
@@ -182,12 +187,12 @@ class OrdersService {
           customer_name: payload.customer_name,
           customer_email: payload.customer_email,
           customer_phone: payload.customer_phone,
-          address_street: payload.address_street,
+          address_street: isPickupOnlyOrder ? (payload.address_street || 'Store pickup') : payload.address_street,
           address_house: payload.address_house || null,
           address_apartment: payload.address_apartment || null,
-          address_city: payload.address_city,
+          address_city: isPickupOnlyOrder ? (payload.address_city || null) : payload.address_city,
           address_region: payload.address_region || null,
-          address_postal_code: payload.address_postal_code,
+          address_postal_code: isPickupOnlyOrder ? (payload.address_postal_code || null) : payload.address_postal_code,
           address_country: payload.address_country,
           subtotal: payload.subtotal,
           shipping_fee: payload.shipping_fee || 0,
