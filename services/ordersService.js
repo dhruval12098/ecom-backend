@@ -484,50 +484,82 @@ class OrdersService {
           note: note || 'Status updated'
         });
 
-      if (shouldReserve && !wasReserved) {
-        setImmediate(async () => {
-          try {
-            const fullOrder = await OrdersService.getOrderById(id, { skipExpiryCheck: true });
-            const payment = (fullOrder?.payments || [])[0] || null;
-            await EmailService.sendOrderConfirmation({
+      const needsStatusEmail = normalized !== previous;
+      const needsConfirmationEmail = shouldReserve && !wasReserved;
+      const needsCancellationEmail = normalized === 'cancelled' && previous !== 'cancelled';
+      const emailDelivery = [];
+
+      if (needsStatusEmail || needsConfirmationEmail || needsCancellationEmail) {
+        try {
+          const fullOrder = await OrdersService.getOrderById(id, { skipExpiryCheck: true });
+          const payment = (fullOrder?.payments || [])[0] || null;
+          const targetEmail = fullOrder?.customer_email || null;
+
+          if (needsConfirmationEmail) {
+            const confirmation = await EmailService.sendOrderConfirmation({
               order: fullOrder,
               items: fullOrder.items || [],
               payment,
               includeInvoicePdf: true
             });
-          } catch (error) {
-            console.error('Failed to send order confirmation email:', error?.message || error);
+            const entry = {
+              type: 'order_confirmation',
+              to: targetEmail,
+              sent: Boolean(confirmation?.sent),
+              skipped: Boolean(confirmation?.skipped),
+              reason: confirmation?.reason || null
+            };
+            emailDelivery.push(entry);
+            console.info(`[order:${id}] confirmation email`, entry);
           }
-        });
-      }
 
-      if (normalized === 'cancelled' && previous !== 'cancelled') {
-        setImmediate(async () => {
-          try {
-            const fullOrder = await OrdersService.getOrderById(id, { skipExpiryCheck: true });
-            await EmailService.sendOrderCancellation({ order: fullOrder });
-          } catch (error) {
-            console.error('Failed to send order cancellation email:', error?.message || error);
+          if (needsCancellationEmail) {
+            const cancellation = await EmailService.sendOrderCancellation({ order: fullOrder });
+            const entry = {
+              type: 'order_cancellation',
+              to: targetEmail,
+              sent: Boolean(cancellation?.sent),
+              skipped: Boolean(cancellation?.skipped),
+              reason: cancellation?.reason || null
+            };
+            emailDelivery.push(entry);
+            console.info(`[order:${id}] cancellation email`, entry);
           }
-        });
-      }
 
-      if (normalized !== previous) {
-        setImmediate(async () => {
-          try {
-            const fullOrder = await OrdersService.getOrderById(id, { skipExpiryCheck: true });
-            await EmailService.sendOrderStatusUpdate({
+          if (needsStatusEmail) {
+            const statusUpdate = await EmailService.sendOrderStatusUpdate({
               order: fullOrder,
               status,
               note
             });
-          } catch (error) {
-            console.error('Failed to send status update email:', error?.message || error);
+            const entry = {
+              type: 'status_update',
+              to: targetEmail,
+              sent: Boolean(statusUpdate?.sent),
+              skipped: Boolean(statusUpdate?.skipped),
+              reason: statusUpdate?.reason || null
+            };
+            emailDelivery.push(entry);
+            console.info(`[order:${id}] status email`, entry);
           }
-        });
+        } catch (emailError) {
+          // Keep status updates resilient, but log email failures for debugging.
+          const failedEntry = {
+            type: 'status_email_error',
+            to: null,
+            sent: false,
+            skipped: false,
+            reason: emailError?.message || String(emailError || 'Unknown email error')
+          };
+          emailDelivery.push(failedEntry);
+          console.error(`[order:${id}] Failed to send order status email(s):`, failedEntry.reason);
+        }
       }
 
-      return updated;
+      return {
+        ...updated,
+        email_delivery: emailDelivery
+      };
     }
 
   static async deleteCodOrder(id) {
