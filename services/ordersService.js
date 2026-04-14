@@ -3,6 +3,28 @@ const { EmailService } = require('./emailService');
 const { DeliveryZonesService } = require('./deliveryZonesService');
 
 class OrdersService {
+  static async enqueueEmailJob({ orderId, jobType, payload = {} }) {
+    const adminClient = createAdminClient();
+    const { data, error } = await adminClient
+      .from('email_jobs')
+      .insert({
+        order_id: orderId,
+        job_type: jobType,
+        payload,
+        status: 'pending',
+        attempts: 0,
+        next_attempt_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to queue email job: ${error.message}`);
+    }
+
+    return data;
+  }
+
   static generateOrderNumber() {
     const now = Date.now().toString();
     const suffix = now.slice(-8);
@@ -489,70 +511,54 @@ class OrdersService {
       const needsCancellationEmail = normalized === 'cancelled' && previous !== 'cancelled';
       const emailDelivery = [];
 
-      if (needsStatusEmail || needsConfirmationEmail || needsCancellationEmail) {
+      if (needsStatusEmail) {
         try {
-          const fullOrder = await OrdersService.getOrderById(id, { skipExpiryCheck: true });
-          const payment = (fullOrder?.payments || [])[0] || null;
-          const targetEmail = fullOrder?.customer_email || null;
-
-          if (needsConfirmationEmail) {
-            const confirmation = await EmailService.sendOrderConfirmation({
-              order: fullOrder,
-              items: fullOrder.items || [],
-              payment,
-              includeInvoicePdf: true
-            });
-            const entry = {
-              type: 'order_confirmation',
-              to: targetEmail,
-              sent: Boolean(confirmation?.sent),
-              skipped: Boolean(confirmation?.skipped),
-              reason: confirmation?.reason || null
-            };
-            emailDelivery.push(entry);
-            console.info(`[order:${id}] confirmation email`, entry);
-          }
-
-          if (needsCancellationEmail) {
-            const cancellation = await EmailService.sendOrderCancellation({ order: fullOrder });
-            const entry = {
-              type: 'order_cancellation',
-              to: targetEmail,
-              sent: Boolean(cancellation?.sent),
-              skipped: Boolean(cancellation?.skipped),
-              reason: cancellation?.reason || null
-            };
-            emailDelivery.push(entry);
-            console.info(`[order:${id}] cancellation email`, entry);
-          }
-
-          if (needsStatusEmail) {
-            const statusUpdate = await EmailService.sendOrderStatusUpdate({
-              order: fullOrder,
-              status,
-              note
-            });
-            const entry = {
-              type: 'status_update',
-              to: targetEmail,
-              sent: Boolean(statusUpdate?.sent),
-              skipped: Boolean(statusUpdate?.skipped),
-              reason: statusUpdate?.reason || null
-            };
-            emailDelivery.push(entry);
-            console.info(`[order:${id}] status email`, entry);
-          }
+          const job = await OrdersService.enqueueEmailJob({
+            orderId: id,
+            jobType: 'status_update',
+            payload: { status, note: note || '' }
+          });
+          emailDelivery.push({ type: 'status_update', queued: true, job_id: job?.id || null });
         } catch (emailError) {
-          // Keep status updates resilient, but log email failures for debugging.
-          const failedEntry = {
-            type: 'status_email_error',
-            to: null,
-            sent: false,
-            skipped: false,
-            reason: emailError?.message || String(emailError || 'Unknown email error')
-          };
-          emailDelivery.push(failedEntry);
-          console.error(`[order:${id}] Failed to send order status email(s):`, failedEntry.reason);
+          emailDelivery.push({
+            type: 'status_update',
+            queued: false,
+            reason: emailError?.message || String(emailError || 'Unknown email queue error')
+          });
+        }
+      }
+
+      if (needsConfirmationEmail) {
+        try {
+          const job = await OrdersService.enqueueEmailJob({
+            orderId: id,
+            jobType: 'order_confirmation',
+            payload: { includeInvoicePdf: true }
+          });
+          emailDelivery.push({ type: 'order_confirmation', queued: true, job_id: job?.id || null });
+        } catch (emailError) {
+          emailDelivery.push({
+            type: 'order_confirmation',
+            queued: false,
+            reason: emailError?.message || String(emailError || 'Unknown email queue error')
+          });
+        }
+      }
+
+      if (needsCancellationEmail) {
+        try {
+          const job = await OrdersService.enqueueEmailJob({
+            orderId: id,
+            jobType: 'order_cancellation',
+            payload: {}
+          });
+          emailDelivery.push({ type: 'order_cancellation', queued: true, job_id: job?.id || null });
+        } catch (emailError) {
+          emailDelivery.push({
+            type: 'order_cancellation',
+            queued: false,
+            reason: emailError?.message || String(emailError || 'Unknown email queue error')
+          });
         }
       }
 
