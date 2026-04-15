@@ -951,7 +951,10 @@ class EmailService {
 
     const fromName = settings?.store_name || 'Store';
     const fromEmail = settings?.smtp_email;
-    const toEmail = settings?.store_email || settings?.support_email || settings?.smtp_email;
+    // Owner alert recipient:
+    // Hardcode to ensure the store owner always receives new order alerts,
+    // regardless of how store settings are configured.
+    const toEmail = 'info@tulsigrocery.be';
     if (!toEmail) return { skipped: true, reason: 'Missing store email' };
 
     const html = EmailService.buildOwnerNewOrderEmail({ order, settings });
