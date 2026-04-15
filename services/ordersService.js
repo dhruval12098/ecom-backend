@@ -313,7 +313,7 @@ class OrdersService {
       try {
         await OrdersService.enqueueEmailJob({
           orderId: order.id,
-          jobType: 'owner_new_order',
+          jobType: 'owner',
           payload: {}
         });
       } catch (queueError) {

@@ -58,7 +58,7 @@ async function processEmailQueue({ providedKey, limitValue }) {
           status: payload.status || orderData?.status,
           note: payload.note || ''
         });
-      } else if (job.job_type === 'owner_new_order') {
+      } else if (job.job_type === 'owner_new_order' || job.job_type === 'owner') {
         sendResult = await EmailService.sendOwnerNewOrderAlert({
           order: orderData
         });
