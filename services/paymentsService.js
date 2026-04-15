@@ -49,8 +49,7 @@ class PaymentsService {
     const { data: updated, error: updateError } = await adminClient
       .from('payments')
       .update({
-        status: 'paid',
-        updated_at: new Date().toISOString()
+        status: 'paid'
       })
       .eq('id', payment.id)
       .select('*')
