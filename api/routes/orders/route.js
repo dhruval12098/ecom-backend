@@ -58,6 +58,10 @@ async function processEmailQueue({ providedKey, limitValue }) {
           status: payload.status || orderData?.status,
           note: payload.note || ''
         });
+      } else if (job.job_type === 'owner_new_order') {
+        sendResult = await EmailService.sendOwnerNewOrderAlert({
+          order: orderData
+        });
       }
 
       if (sendResult?.sent) {

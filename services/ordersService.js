@@ -310,6 +310,17 @@ class OrdersService {
         }
       }
 
+      try {
+        await OrdersService.enqueueEmailJob({
+          orderId: order.id,
+          jobType: 'owner_new_order',
+          payload: {}
+        });
+      } catch (queueError) {
+        // Do not fail checkout if queue insert fails.
+        console.error(`[order:${order.id}] Failed to queue owner new order email:`, queueError?.message || queueError);
+      }
+
       return { order, items: items || [], payment };
     }
 
