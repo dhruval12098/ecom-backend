@@ -5,6 +5,27 @@ const normalizeStatus = (value) => String(value || '').toLowerCase().trim();
 const isValidStatus = (value) => value === 'active' || value === 'inactive';
 
 class SpecialSubcategoriesService {
+  static async resolveUniqueSlug(adminClient, baseSlug, excludeId = null) {
+    let candidate = baseSlug;
+    let attempt = 1;
+    while (attempt <= 200) {
+      let query = adminClient.from('special_subcategories').select('id').eq('slug', candidate).limit(1);
+      if (excludeId !== null && excludeId !== undefined) {
+        query = query.neq('id', excludeId);
+      }
+      const { data, error } = await query;
+      if (error) {
+        throw new Error(`Database error: ${error.message}`);
+      }
+      if (!Array.isArray(data) || data.length === 0) {
+        return candidate;
+      }
+      attempt += 1;
+      candidate = `${baseSlug}-${attempt}`;
+    }
+    throw new Error('Unable to generate a unique slug');
+  }
+
   static async getAllSpecialSubcategories() {
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
@@ -46,12 +67,13 @@ class SpecialSubcategoriesService {
     }
 
     const adminClient = createAdminClient();
+    const uniqueSlug = await SpecialSubcategoriesService.resolveUniqueSlug(adminClient, slug);
     const { data, error } = await adminClient
       .from('special_subcategories')
       .insert({
         category_id: payload.categoryId,
         name: payload.name,
-        slug,
+        slug: uniqueSlug,
         description: payload.description || null,
         image_url: payload.imageUrl || null,
         status,
@@ -75,10 +97,13 @@ class SpecialSubcategoriesService {
     const slug = slugify(payload.slug || payload.name);
     if (!slug) throw new Error('Invalid slug');
 
+    const adminClient = createAdminClient();
+    const uniqueSlug = await SpecialSubcategoriesService.resolveUniqueSlug(adminClient, slug, id);
+
     const next = {
       category_id: payload.categoryId,
       name: payload.name,
-      slug,
+      slug: uniqueSlug,
       description: payload.description || null,
       image_url: payload.imageUrl || null,
       updated_at: new Date().toISOString()
@@ -91,7 +116,6 @@ class SpecialSubcategoriesService {
       next.status = status;
     }
 
-    const adminClient = createAdminClient();
     const { data, error } = await adminClient
       .from('special_subcategories')
       .update(next)

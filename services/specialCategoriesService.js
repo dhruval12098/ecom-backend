@@ -5,6 +5,27 @@ const normalizeStatus = (value) => String(value || '').toLowerCase().trim();
 const isValidStatus = (value) => value === 'active' || value === 'inactive';
 
 class SpecialCategoriesService {
+  static async resolveUniqueSlug(adminClient, baseSlug, excludeId = null) {
+    let candidate = baseSlug;
+    let attempt = 1;
+    while (attempt <= 200) {
+      let query = adminClient.from('special_categories').select('id').eq('slug', candidate).limit(1);
+      if (excludeId !== null && excludeId !== undefined) {
+        query = query.neq('id', excludeId);
+      }
+      const { data, error } = await query;
+      if (error) {
+        throw new Error(`Database error: ${error.message}`);
+      }
+      if (!Array.isArray(data) || data.length === 0) {
+        return candidate;
+      }
+      attempt += 1;
+      candidate = `${baseSlug}-${attempt}`;
+    }
+    throw new Error('Unable to generate a unique slug');
+  }
+
   static async getAllSpecialCategories() {
     const adminClient = createAdminClient();
     const { data, error } = await adminClient
@@ -31,11 +52,12 @@ class SpecialCategoriesService {
     }
 
     const adminClient = createAdminClient();
+    const uniqueSlug = await SpecialCategoriesService.resolveUniqueSlug(adminClient, slug);
     const { data, error } = await adminClient
       .from('special_categories')
       .insert({
         name: payload.name,
-        slug,
+        slug: uniqueSlug,
         description: payload.description || null,
         image_url: payload.image_url ?? payload.imageUrl ?? null,
         pickup_only: payload.pickup_only ?? true,
@@ -59,9 +81,12 @@ class SpecialCategoriesService {
     const slug = slugify(payload.slug || payload.name);
     if (!slug) throw new Error('Invalid slug');
 
+    const adminClient = createAdminClient();
+    const uniqueSlug = await SpecialCategoriesService.resolveUniqueSlug(adminClient, slug, id);
+
     const next = {
       name: payload.name,
-      slug,
+      slug: uniqueSlug,
       updated_at: new Date().toISOString()
     };
 
@@ -79,7 +104,6 @@ class SpecialCategoriesService {
       next.status = status;
     }
 
-    const adminClient = createAdminClient();
     const { data, error } = await adminClient
       .from('special_categories')
       .update(next)

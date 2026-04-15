@@ -24,4 +24,31 @@ router.get('/', async (req, res) => {
   }
 });
 
+// POST /api/payments/:orderId/mark-paid-cod
+router.post('/:orderId/mark-paid-cod', async (req, res) => {
+  try {
+    const orderId = Number(req.params.orderId);
+    if (!Number.isFinite(orderId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid order ID',
+        message: 'Order ID must be a number'
+      });
+    }
+
+    const data = await PaymentsService.markCodOrderPaid(orderId);
+    res.json({
+      success: true,
+      data,
+      message: 'COD payment marked as paid successfully'
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      error: error.message || 'Internal server error',
+      message: 'Failed to mark COD payment as paid'
+    });
+  }
+});
+
 module.exports = router;
