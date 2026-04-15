@@ -46,6 +46,14 @@ class PaymentsService {
       throw new Error('Only COD payments can be marked paid manually');
     }
 
+    const currentStatus = String(payment.status || '').trim().toLowerCase();
+    if (currentStatus === 'paid') {
+      return {
+        ...payment,
+        already_paid: true
+      };
+    }
+
     const { data: updated, error: updateError } = await adminClient
       .from('payments')
       .update({
@@ -59,7 +67,10 @@ class PaymentsService {
       throw new Error(`Database error: ${updateError.message}`);
     }
 
-    return updated;
+    return {
+      ...updated,
+      already_paid: false
+    };
   }
 }
 

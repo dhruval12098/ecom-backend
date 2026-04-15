@@ -1,5 +1,6 @@
 const express = require('express');
 const { PaymentsService } = require('../../../services/paymentsService');
+const { OrdersService } = require('../../../services/ordersService');
 
 const router = express.Router();
 
@@ -37,10 +38,35 @@ router.post('/:orderId/mark-paid-cod', async (req, res) => {
     }
 
     const data = await PaymentsService.markCodOrderPaid(orderId);
+    const alreadyPaid = Boolean(data?.already_paid);
+
+    let emailQueued = false;
+    let emailQueueError = null;
+    if (!alreadyPaid) {
+      try {
+        await OrdersService.enqueueEmailJob({
+          orderId,
+          jobType: 'order_confirmation',
+          payload: { includeInvoicePdf: false, source: 'cod_mark_paid' }
+        });
+        emailQueued = true;
+      } catch (queueError) {
+        emailQueueError = queueError?.message || 'Failed to queue confirmation email';
+      }
+    }
+
     res.json({
       success: true,
-      data,
-      message: 'COD payment marked as paid successfully'
+      data: {
+        ...data,
+        email_queued: emailQueued,
+        email_queue_error: emailQueueError
+      },
+      message: alreadyPaid
+        ? 'COD payment was already marked as paid'
+        : emailQueued
+          ? 'COD payment marked as paid and confirmation email queued'
+          : 'COD payment marked as paid (email queue failed)'
     });
   } catch (error) {
     res.status(400).json({
